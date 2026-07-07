@@ -12,10 +12,12 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:stars": "tsx scripts/build-stars.ts"
   },
   "dependencies": {
     "@react-three/fiber": "^9.6.1",
+    "idb": "^8.0.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "three": "^0.185.1",
@@ -29,6 +31,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.185.0",
     "@vitejs/plugin-react": "^6.0.3",
+    "csv-parse": "^7.0.1",
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -36,6 +39,7 @@
     "globals": "^17.7.0",
     "prettier": "^3.9.4",
     "tailwindcss": "^4.3.2",
+    "tsx": "^4.23.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.63.0",
     "vite": "^8.1.1",
