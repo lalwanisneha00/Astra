@@ -1,0 +1,26 @@
+/* Design tokens for Astra, exposed as Tailwind v4 theme values via @theme.
+   Each --color-, --blur-, and --shadow- variable below automatically
+   becomes a Tailwind utility (e.g. --color-space-950 becomes the
+   bg-space-950 and text-space-950 utilities). */
+@theme {
+  /* Backgrounds: near-black with a subtle blue cast */
+  --color-space-950: #04060c;
+  --color-space-900: #080c18;
+  --color-space-800: #0e1424;
+  --color-space-700: #161d33;
+
+  /* Foreground text */
+  --color-star-100: #f4f6ff;
+  --color-star-300: #b6c0e0;
+  --color-star-500: #7b86a8;
+
+  /* Accent */
+  --color-accent-400: #8ab4ff;
+  --color-accent-500: #5b8cff;
+
+  /* Glass panel surface */
+  --color-glass: rgb(12 16 30 / 55%);
+  --color-glass-border: rgb(255 255 255 / 10%);
+  --blur-glass: 20px;
+  --shadow-glass: 0 8px 32px rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 6%);
+}
