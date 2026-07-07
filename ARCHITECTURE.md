@@ -177,3 +177,25 @@ These are architected for now, not built:
   simple app-title header.
 - `ErrorBoundary` wraps the app shell.
 - One Vitest suite (`src/lib/math.test.ts`) proves the test harness.
+
+### Phase 2 — Camera controls: pan, zoom, inertia, touch
+
+- `src/scene/camera/CameraController.tsx`: owns all pointer/wheel/touch
+  input. Drag rotates the camera via yaw/pitch (Euler `'YXZ'` order, no
+  roll); pitch is clamped to ±85° so you can't flip past the poles.
+  Wheel and two-finger pinch both adjust `useSceneStore`'s `targetFov`
+  within a 20°–100° clamp.
+- Release-to-glide inertia and FOV changes are both eased via
+  `src/lib/easing.ts`'s `damp()` — a dependency-free, frame-rate
+  independent exponential damp — applied every frame in `useFrame`.
+  Nothing here touches React state per frame; `targetFov`/`fov` in the
+  store are the only Zustand writes, and only when they actually change.
+- `prefers-reduced-motion` disables inertia (velocity is zeroed instead
+  of decayed) and FOV easing snaps straight to the target. The check
+  moved to `src/lib/motion.ts` so `StarsLayer` and `CameraController`
+  share one implementation.
+- `eslint-plugin-react-hooks`'s new `immutability` rule (aimed at
+  React-Compiler-style code) flags direct mutation of `useThree()`'s
+  `camera` — which is the correct, standard R3F pattern this project's
+  rendering model depends on. Scoped that rule off for `src/scene/**`
+  rather than contorting the code (see `eslint.config.js`).
