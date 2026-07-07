@@ -1,6 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { prefersReducedMotion } from '@/lib/motion'
 import fragmentShader from '@/scene/shaders/starField.frag.glsl?raw'
 import vertexShader from '@/scene/shaders/starField.vert.glsl?raw'
 
@@ -45,11 +46,6 @@ function generateStarField(count: number, radius: number): StarFieldAttributes {
   }
 
   return { positions, sizes, phases, colors }
-}
-
-function prefersReducedMotion(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 export function StarsLayer() {

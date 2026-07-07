@@ -30,5 +30,17 @@ export default tseslint.config(
       globals: globals.node,
     },
   },
+  {
+    // react-hooks' React-Compiler-oriented `immutability` rule flags direct
+    // mutation of objects returned by hooks (e.g. `useThree()`'s `camera`).
+    // That's exactly how R3F scene code is supposed to work: Three.js
+    // objects (camera, materials, meshes) are mutated imperatively every
+    // frame in useFrame for performance, per this project's rendering model
+    // (see ARCHITECTURE.md). Disabled only where that pattern lives.
+    files: ['src/scene/**/*.{ts,tsx}'],
+    rules: {
+      'react-hooks/immutability': 'off',
+    },
+  },
   prettierConfig,
 )

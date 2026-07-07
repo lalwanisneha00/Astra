@@ -1,4 +1,5 @@
 import { Canvas } from '@react-three/fiber'
+import { CameraController } from '@/scene/camera/CameraController'
 import { StarsLayer } from '@/scene/layers/StarsLayer'
 
 const INITIAL_FOV = 75
@@ -16,12 +17,13 @@ const BACKGROUND_COLOR = '#04060c'
 export function SceneCanvas() {
   return (
     <Canvas
-      className="absolute inset-0"
+      className="absolute inset-0 touch-none"
       dpr={[1, 2]}
       gl={{ antialias: true }}
       camera={{ fov: INITIAL_FOV, near: NEAR_PLANE, far: FAR_PLANE, position: [0, 0, 0] }}
     >
       <color attach="background" args={[BACKGROUND_COLOR]} />
+      <CameraController />
       <StarsLayer />
     </Canvas>
   )
