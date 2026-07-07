@@ -12,9 +12,12 @@ data credits (populated as real catalogs are integrated, starting Phase 3).
 
 ## Status
 
-**Phase 1 of 13**: project scaffold, design tokens, and a fullscreen
-procedural starfield placeholder. No real star data, camera controls, or
-interactivity yet — those come in later phases.
+**Phase 3 of 13**: a real, ~40,000-star catalog (HYG Database) renders
+with accurate positions, magnitude-based size, and real B-V-derived
+color, navigable with drag-to-pan/wheel-or-pinch-to-zoom camera controls
+with release inertia. Constellations, search, time travel, planets, and
+the rest of the phase plan are still ahead — see `ARCHITECTURE.md`'s
+phase log.
 
 ## Getting started
 
@@ -29,22 +32,24 @@ Open the URL Vite prints (typically http://localhost:5173).
 
 ## Scripts
 
-| Script                 | What it does                                  |
-| ---------------------- | --------------------------------------------- |
-| `npm run dev`          | Start the Vite dev server                     |
-| `npm run build`        | Typecheck (`tsc -b`) and build for production |
-| `npm run preview`      | Preview the production build locally          |
-| `npm run typecheck`    | Typecheck only, no build                      |
-| `npm run lint`         | Lint with ESLint                              |
-| `npm run format`       | Format the codebase with Prettier             |
-| `npm run format:check` | Check formatting without writing              |
-| `npm run test`         | Run the Vitest suite once                     |
-| `npm run test:watch`   | Run Vitest in watch mode                      |
+| Script                 | What it does                                               |
+| ---------------------- | ---------------------------------------------------------- |
+| `npm run dev`          | Start the Vite dev server                                  |
+| `npm run build`        | Typecheck (`tsc -b`) and build for production              |
+| `npm run preview`      | Preview the production build locally                       |
+| `npm run typecheck`    | Typecheck only, no build                                   |
+| `npm run lint`         | Lint with ESLint                                           |
+| `npm run format`       | Format the codebase with Prettier                          |
+| `npm run format:check` | Check formatting without writing                           |
+| `npm run test`         | Run the Vitest suite once                                  |
+| `npm run test:watch`   | Run Vitest in watch mode                                   |
+| `npm run build:stars`  | Re-fetch HYG and regenerate `public/data/stars-tier*.json` |
 
 ## Tech stack
 
 TypeScript (strict) · Vite · React 19 · Three.js / React Three Fiber ·
-Zustand · Tailwind CSS v4 · ESLint + Prettier · Vitest.
+Zustand · Tailwind CSS v4 · `idb` (IndexedDB caching) · ESLint + Prettier
+· Vitest · `tsx` + `csv-parse` (offline data pipeline only).
 
 All dependencies are free and open-source, and any future hosting target
 is chosen to stay on a free tier — see the "Cost constraint" note in

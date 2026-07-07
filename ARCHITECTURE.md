@@ -199,3 +199,47 @@ These are architected for now, not built:
   `camera` — which is the correct, standard R3F pattern this project's
   rendering model depends on. Scoped that rule off for `src/scene/**`
   rather than contorting the code (see `eslint.config.js`).
+
+### Phase 3 — Real star catalog: build pipeline + accurate rendering
+
+- **Data pipeline** (`scripts/build-stars.ts`, run manually via
+  `npm run build:stars`, not part of `npm run build`): fetches the HYG
+  Database (v41, CC BY-SA 4.0 — see `ATTRIBUTIONS.md`), parses ~120k
+  rows, excludes the Sun (HYG id 0 — not a background star), and writes
+  three magnitude tiers (≤4, ≤6.5, ≤8) as compact **columnar** JSON
+  (`public/data/stars-tier{0,1,2}.json` — one array per field, not an
+  array of objects) — this is a deliberate, committed build artifact;
+  the app never fetches HYG or runs this script itself.
+- **Color** is derived at build time from each star's B-V index:
+  Ballesteros' formula (B-V → effective temperature) feeds Tanner
+  Helland's blackbody approximation (temperature → RGB). Both live in
+  `scripts/lib/color.ts` and are unit-tested directly against known
+  values (the Sun's ~5778K; blue-white vs. orange output for
+  Rigel/Betelgeuse-like B-V). The pipeline's actual output was spot
+  checked against Sirius, Rigel, Betelgeuse, Vega, and Polaris —
+  position, distance, constellation, and color all matched known values.
+- **Position and size**, by contrast, are computed **client-side**, once
+  per star when a tier loads (not per frame): `src/astronomy/
+coordinates.ts`'s `equatorialToCartesian` turns each shipped RA/Dec
+  (degrees — the one place RA units are standardized, see
+  `src/types/coordinates.ts`) into a unit vector, and magnitude maps
+  linearly to point size. Keeping these client-side (rather than also
+  precomputing them at build time) avoids a redundant second source of
+  truth and keeps the JSON smaller; the trig cost is trivial done once
+  per star at load time.
+- **Loading**: `src/data/loaders/starLoader.ts` fetches each tier and
+  caches it in IndexedDB (via `idb`) behind a version-stamped key, so a
+  future reprocessing of the catalog just needs a key bump, not real
+  invalidation logic. `src/hooks/useStarCatalog.ts` loads tier0 → tier1
+  → tier2 in order (brightest first, for instant first paint) and merges
+  each newly-arrived tier's buffers into one growing set — this is
+  plain React state, not a `useFrame`-driven value, since it only
+  changes a handful of times per session rather than every frame.
+- `StarsLayer`'s shader and geometry setup are **unchanged** from
+  Phase 1/2 — real data slots into the exact same `position`/`aSize`/
+  `aColor`/`aTwinklePhase` attributes the procedural placeholder used.
+- Node's native TypeScript execution (via `tsx`, since `scripts/` needs
+  relative-import extensions like `./lib/color.ts` under `module:
+nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
+  keeps the data pipeline in the same language as the app without
+  needing a bundler for one-off scripts.
