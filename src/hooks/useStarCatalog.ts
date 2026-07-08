@@ -2,11 +2,9 @@ import { useEffect, useState } from 'react'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { loadStarTier, type StarTierData, type StarTierName } from '@/data/loaders/starLoader'
 import { clamp } from '@/lib/math'
+import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { useDataStore } from '@/state/useDataStore'
 import type { Star } from '@/types/star'
-
-// Matches the celestial sphere radius the camera and StarsLayer assume.
-const SPHERE_RADIUS = 150
 
 const TIER_ORDER: StarTierName[] = ['tier0', 'tier1', 'tier2']
 
@@ -89,9 +87,9 @@ function tierToCatalog(tier: StarTierData): StarCatalog {
 
   for (let i = 0; i < count; i++) {
     const [x, y, z] = equatorialToCartesian({ ra: tier.ra[i] ?? 0, dec: tier.dec[i] ?? 0 })
-    positions[i * 3] = x * SPHERE_RADIUS
-    positions[i * 3 + 1] = y * SPHERE_RADIUS
-    positions[i * 3 + 2] = z * SPHERE_RADIUS
+    positions[i * 3] = x * CELESTIAL_SPHERE_RADIUS
+    positions[i * 3 + 1] = y * CELESTIAL_SPHERE_RADIUS
+    positions[i * 3 + 2] = z * CELESTIAL_SPHERE_RADIUS
 
     sizes[i] = magnitudeToPointSize(tier.mag[i] ?? BRIGHTEST_REFERENCE_MAG)
 

@@ -13,9 +13,11 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:stars": "tsx scripts/build-stars.ts"
+    "build:stars": "tsx scripts/build-stars.ts",
+    "build:constellations": "tsx scripts/build-constellations.ts"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "framer-motion": "^12.42.2",
     "idb": "^8.0.3",

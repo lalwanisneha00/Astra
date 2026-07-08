@@ -30,15 +30,32 @@ shipped in `public/data/`.
   build time. The Sun (HYG id 0) is excluded — it isn't a background
   star as seen from Earth.
 
+### d3-celestial (constellation lines and names)
+
+- **Source:** [d3-celestial](https://github.com/ofrohn/d3-celestial) by
+  Olaf Frohn — `data/constellations.json` (names/label positions) and
+  `data/constellations.lines.json` (line figures).
+- **License:** BSD-3-Clause. Copyright notice retained here and in
+  `scripts/build-constellations.ts`.
+- **Used for:** the 88 IAU constellation figures (as connected line
+  segments) and their name label positions. RA is converted from
+  d3-celestial's `[-180, 180]` longitude-style convention to this
+  project's standard `[0, 360)` degrees (see
+  `scripts/build-constellations.ts`).
+- **Not from this dataset:** zodiac membership, hemisphere, and "best
+  viewing months" are computed (`src/astronomy/constellationFacts.ts`);
+  mythology and fun facts are hand-written for a curated subset
+  (`src/content/constellations.ts`); "brightest stars" is computed at
+  runtime from the HYG catalog already loaded for Phase 3/4.
+
 Planned sources, to be added (with license details confirmed at
 integration time) as their phase lands:
 
-| Dataset                                                                                | Used for                                                      | Planned in |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------- |
-| IAU WGSN official star names                                                           | Supplementary proper names                                    | Phase 3+   |
-| [d3-celestial](https://github.com/ofrohn/d3-celestial) (or Stellarium skyculture data) | Constellation lines/names/boundaries                          | Phase 5    |
-| [OpenNGC](https://github.com/mattiaverga/OpenNGC)                                      | Deep-sky objects (NGC/IC, Messier cross-refs)                 | Phase 10   |
-| NASA Planetary Fact Sheets (nssdc.gsfc.nasa.gov)                                       | Planet physical facts (moons, periods, temperature, diameter) | Phase 9    |
+| Dataset                                           | Used for                                                      | Planned in |
+| ------------------------------------------------- | ------------------------------------------------------------- | ---------- |
+| IAU WGSN official star names                      | Supplementary proper names                                    | Phase 3+   |
+| [OpenNGC](https://github.com/mattiaverga/OpenNGC) | Deep-sky objects (NGC/IC, Messier cross-refs)                 | Phase 10   |
+| NASA Planetary Fact Sheets (nssdc.gsfc.nasa.gov)  | Planet physical facts (moons, periods, temperature, diameter) | Phase 9    |
 
 Planet, Sun, and Moon _positions_ are computed at runtime by
 `astronomy-engine` (MIT license) — not a static dataset.
