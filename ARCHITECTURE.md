@@ -702,13 +702,13 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   `.find((x) => x.id === ...)` pattern already used for
   `selectedStar`/`selectedConstellation`/`selectedPlanet`/`selectedDso`)
   and flies to _that_ object's current position.
-- **Ranking**: matches are tiered (exact label match > prefix > substring
-  > keyword-blob-only, the last covering a DSO's Messier number or a
-  > star's alternate designations), then sorted within a tier by `rank` —
-  > real apparent magnitude for stars/DSOs, a fixed low value for
-  > constellations/planets so these prominent, small-count object types
-  > don't lose to an incidentally-matching dim background star. Pure
-  > function (`src/lib/search.ts`), unit-tested directly.
+- **Ranking**: matches are tiered (exact label match beats prefix beats
+  substring beats keyword-blob-only, the last covering a DSO's Messier
+  number or a star's alternate designations), then sorted within a tier
+  by `rank` — real apparent magnitude for stars/DSOs, a fixed low value
+  for constellations/planets so these prominent, small-count object
+  types don't lose to an incidentally-matching dim background star.
+  Pure function (`src/lib/search.ts`), unit-tested directly.
 - **Always-visible bar, not a hidden dialog**: the spec's own wording
   ("a search bar") ruled out an icon-triggered modal. Positioned
   top-center at `z-20`, same layer as `LocationPicker` — both are
@@ -718,3 +718,36 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   object's info panel (`select({ type, id })`), matching what clicking
   the object directly in the sky already does — search is a shortcut to
   the same interaction, not a separate one.
+
+### Phase 12 — Layer toggle dock
+
+- **`LayerToggleDock`** (`ui/controls/`) is the dock every
+  `useLayersStore` flag was added for back in Phase 1. Expands upward
+  from a bottom-left button — the one screen corner not already claimed
+  by the header (top-left), search bar (top-center), info panels
+  (top-right), or time slider (bottom-center). Reuses
+  `useDismissablePanel` (Esc/outside-click) like every other overlay.
+- **Two flags existed but had never been wired to anything**:
+  `starNames` and `mythology`. Rather than leave them as dead checkboxes
+  once the dock made them visible and clickable, this phase gave both a
+  real effect:
+  - `starNames` gates a new `StarLabelsLayer` (mirrors `LabelsLayer`'s
+    constellation-name approach) — off by default, since up to ~3,400
+    named stars across all three catalog tiers is enough `<Html>` nodes
+    to clutter the sky badly, unlike the 88 always-on constellation
+    names.
+  - `mythology` gates `ConstellationPanel`'s mythology/fun-facts text
+    (structured facts always show regardless). Its Phase 1 placeholder
+    default was `false` — flipped to `true` here, since defaulting it
+    off would have made already-shipped curated content disappear the
+    instant the flag started actually doing something, a regression
+    nobody asked for.
+- **`labels` (planet/DSO name labels)**: previously `PlanetMarker`
+  always rendered its name label and `DsoMarker` rendered its label
+  whenever selected, both unconditionally. Both now also check
+  `useLayersStore.labels` (default `true`, so behavior is unchanged
+  until someone actually toggles it off) — the flag's original intent,
+  now that constellation names and star names each have their own
+  dedicated toggle.
+- Every flag in `LayerVisibility` now has a real, visible effect and
+  appears in the dock — nothing left inert.

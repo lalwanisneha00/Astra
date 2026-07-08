@@ -7,6 +7,7 @@ import { GridLayer } from '@/scene/layers/GridLayer'
 import { HorizonLayer } from '@/scene/layers/HorizonLayer'
 import { LabelsLayer } from '@/scene/layers/LabelsLayer'
 import { PlanetsLayer } from '@/scene/layers/PlanetsLayer'
+import { StarLabelsLayer } from '@/scene/layers/StarLabelsLayer'
 import { StarsLayer } from '@/scene/layers/StarsLayer'
 import type { Constellation } from '@/types/constellation'
 import type { ObserverLocation } from '@/types/coordinates'
@@ -62,6 +63,7 @@ export function SceneCanvas({
         altitudes={altitudes}
       />
       <LabelsLayer constellations={constellations} />
+      <StarLabelsLayer stars={starCatalog.stars} observer={observer} date={date} />
       <DeepSkyLayer objects={deepSkyObjects} observer={observer} date={date} />
       <PlanetsLayer observer={observer} date={date} />
       <HorizonLayer observer={observer} date={date} />

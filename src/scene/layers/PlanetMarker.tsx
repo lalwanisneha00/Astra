@@ -8,6 +8,7 @@ import { PLANET_CONTENT } from '@/content/planets'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { PlanetOrbitTrail } from '@/scene/layers/PlanetOrbitTrail'
 import { getPlanetGlowTexture, getPlanetTexture } from '@/scene/textures/planetTexture'
+import { useLayersStore } from '@/state/useLayersStore'
 import { useSceneStore } from '@/state/useSceneStore'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import type { Planet } from '@/types/planet'
@@ -49,6 +50,7 @@ export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
   )
   const select = useSelectionStore((state) => state.select)
   const setHoveredObjectId = useSceneStore((state) => state.setHoveredObjectId)
+  const showLabels = useLayersStore((state) => state.labels)
   const content = PLANET_CONTENT[planet.id]
   const baseColor = content?.colorHex ?? '#ffffff'
   const visualStyle = content?.visualStyle ?? 'rocky'
@@ -106,11 +108,13 @@ export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
           <meshBasicMaterial map={texture} color={color} transparent depthWrite={false} />
         </mesh>
       </Billboard>
-      <Html position={position} center style={{ pointerEvents: 'none' }}>
-        <span className="block translate-y-3 text-center text-[10px] tracking-wide whitespace-nowrap text-star-300 uppercase select-none">
-          {planet.name}
-        </span>
-      </Html>
+      {showLabels && (
+        <Html position={position} center style={{ pointerEvents: 'none' }}>
+          <span className="block translate-y-3 text-center text-[10px] tracking-wide whitespace-nowrap text-star-300 uppercase select-none">
+            {planet.name}
+          </span>
+        </Html>
+      )}
     </group>
   )
 }

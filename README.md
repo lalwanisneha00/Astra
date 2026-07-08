@@ -12,12 +12,14 @@ data credits (populated as real catalogs are integrated, starting Phase 3).
 
 ## Status
 
-**Phase 11 of 13**: a unified search bar (top-center) finds stars,
-constellations, planets, and deep-sky objects by name — picking a
-result flies the camera there and opens its facts panel. ~510 real
-galaxies, star clusters, and nebulae (Andromeda, the Orion Nebula, the
-Pleiades, and hundreds more from the OpenNGC catalog) and Mercury
-through Neptune all render at their real positions (Phases 9-10), each
+**Phase 12 of 13**: a "Layers" dock (bottom-left) toggles every visual
+layer on or off — constellation lines/names, star names, planets,
+deep-sky objects, equatorial/horizon grids, object labels, and
+constellation mythology. A unified search bar (top-center, Phase 11)
+finds stars, constellations, planets, and deep-sky objects by name —
+picking a result flies the camera there and opens its facts panel.
+~510 real galaxies, star clusters, and nebulae and Mercury through
+Neptune all render at their real positions (Phases 9-10), each
 clickable for a facts panel. The rest of the phase plan is still ahead —
 see `ARCHITECTURE.md`'s phase log.
 

@@ -7,6 +7,7 @@ import { DSO_TYPE_META } from '@/content/dsoTypes'
 import { clamp } from '@/lib/math'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { getDsoTexture } from '@/scene/textures/dsoTexture'
+import { useLayersStore } from '@/state/useLayersStore'
 import { useSceneStore } from '@/state/useSceneStore'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import type { DeepSkyObject } from '@/types/deepSkyObject'
@@ -44,6 +45,7 @@ export function DsoMarker({ dso }: DsoMarkerProps) {
   )
   const select = useSelectionStore((state) => state.select)
   const setHoveredObjectId = useSceneStore((state) => state.setHoveredObjectId)
+  const showLabels = useLayersStore((state) => state.labels)
   const meta = DSO_TYPE_META[dso.type]
   const texture = useMemo(() => getDsoTexture(meta.icon), [meta.icon])
   const markerSize = BASE_MARKER_SIZE * markerSizeMultiplier(dso.sizeArcmin)
@@ -91,7 +93,7 @@ export function DsoMarker({ dso }: DsoMarkerProps) {
           />
         </mesh>
       </Billboard>
-      {isSelected && (
+      {showLabels && isSelected && (
         <Html position={position} center style={{ pointerEvents: 'none' }}>
           <span className="block translate-y-3 text-center text-[10px] tracking-wide whitespace-nowrap text-star-300 uppercase select-none">
             {dso.messier ?? dso.commonNames[0] ?? dso.id}

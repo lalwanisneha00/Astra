@@ -1,4 +1,5 @@
 import { CONSTELLATION_CONTENT } from '@/content/constellations'
+import { useLayersStore } from '@/state/useLayersStore'
 import type { Constellation, Hemisphere } from '@/types/constellation'
 import type { Star } from '@/types/star'
 import { InfoPanel, type InfoPanelFact } from './InfoPanel'
@@ -20,7 +21,9 @@ const HEMISPHERE_LABELS: Record<Hemisphere, string> = {
 /** Constellation-specific variant of InfoPanel. Zodiac/hemisphere/best
  * viewing months are computed facts (see astronomy/constellationFacts);
  * mythology and fun facts are hand-written and only exist for a curated
- * set of well-known constellations (src/content/constellations.ts). */
+ * set of well-known constellations (src/content/constellations.ts).
+ * Both are gated behind the `mythology` layer toggle (Phase 12) —
+ * structured facts always show regardless. */
 export function ConstellationPanel({
   constellation,
   brightestStars,
@@ -28,6 +31,7 @@ export function ConstellationPanel({
   onSelectStar,
 }: ConstellationPanelProps) {
   const content = CONSTELLATION_CONTENT[constellation.id]
+  const showMythology = useLayersStore((state) => state.mythology)
 
   const facts: InfoPanelFact[] = [
     { label: 'Genitive', value: constellation.genitive },
@@ -42,8 +46,8 @@ export function ConstellationPanel({
       title={constellation.name}
       subtitle={content?.pronunciation}
       facts={facts}
-      description={content?.mythology}
-      funFacts={content?.funFacts}
+      description={showMythology ? content?.mythology : undefined}
+      funFacts={showMythology ? content?.funFacts : undefined}
       related={brightestStars.map((star) => ({
         id: star.id,
         label: star.names[0] ?? `HYG ${star.id}`,

@@ -15,6 +15,7 @@ import { useSelectionStore } from '@/state/useSelectionStore'
 import { useTimeStore } from '@/state/useTimeStore'
 import type { ObserverLocation } from '@/types/coordinates'
 import type { SearchResult } from '@/types/search'
+import { LayerToggleDock } from '@/ui/controls/LayerToggleDock'
 import { LocationPicker } from '@/ui/controls/LocationPicker'
 import { TimeSlider } from '@/ui/controls/TimeSlider'
 import { TodayButton } from '@/ui/controls/TodayButton'
@@ -141,6 +142,9 @@ export function App() {
         </div>
         <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 w-[min(90vw,420px)] -translate-x-1/2">
           <TimeSlider />
+        </div>
+        <div className="pointer-events-none absolute bottom-4 left-4 z-10">
+          <LayerToggleDock />
         </div>
         <AnimatePresence>
           {selectedStar && (
