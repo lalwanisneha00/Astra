@@ -7,13 +7,14 @@ import type { PlanetId } from '@/astronomy/planets'
 import { PLANET_CONTENT } from '@/content/planets'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { PlanetOrbitTrail } from '@/scene/layers/PlanetOrbitTrail'
-import { getPlanetTexture } from '@/scene/textures/planetTexture'
+import { getPlanetGlowTexture, getPlanetTexture } from '@/scene/textures/planetTexture'
 import { useSceneStore } from '@/state/useSceneStore'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import type { Planet } from '@/types/planet'
 
-const MARKER_SIZE = 3.2
-const HIGHLIGHT_SCALE = 1.5
+const BASE_MARKER_SIZE = 3.2
+const GLOW_SIZE_MULTIPLIER = 2.1
+const HIGHLIGHT_SCALE = 1.35
 const HIGHLIGHT_BLEND = 0.45
 
 interface PlanetMarkerProps {
@@ -34,6 +35,13 @@ interface PlanetMarkerProps {
  * ConstellationFigure's precedent for individually-clickable,
  * independently-selectable per-object meshes (as opposed to StarsLayer's
  * single-buffer approach, which only makes sense at star-catalog scale).
+ *
+ * Gas giants get cloud-band texturing and Saturn gets its rings baked
+ * into a per-style sprite (PLANET_CONTENT.visualStyle); marker size
+ * varies per planet (PLANET_CONTENT.relativeSize) for visual variety —
+ * not a true diameter ratio, which would make the rocky planets
+ * invisible next to Jupiter at this scale. A soft additive glow sprite
+ * sits behind the body for an atmospheric-halo feel.
  */
 export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
   const isSelected = useSelectionStore(
@@ -43,7 +51,10 @@ export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
   const setHoveredObjectId = useSceneStore((state) => state.setHoveredObjectId)
   const content = PLANET_CONTENT[planet.id]
   const baseColor = content?.colorHex ?? '#ffffff'
-  const texture = useMemo(() => getPlanetTexture(), [])
+  const visualStyle = content?.visualStyle ?? 'rocky'
+  const markerSize = BASE_MARKER_SIZE * (content?.relativeSize ?? 1)
+  const texture = useMemo(() => getPlanetTexture(visualStyle), [visualStyle])
+  const glowTexture = useMemo(() => getPlanetGlowTexture(), [])
 
   const color = useMemo(() => {
     const base = new THREE.Color(baseColor)
@@ -73,13 +84,25 @@ export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
     <group>
       <PlanetOrbitTrail id={planet.id as PlanetId} date={date} color={baseColor} />
       <Billboard position={position}>
+        <mesh position={[0, 0, -0.05]} scale={isSelected ? HIGHLIGHT_SCALE : 1}>
+          <planeGeometry
+            args={[markerSize * GLOW_SIZE_MULTIPLIER, markerSize * GLOW_SIZE_MULTIPLIER]}
+          />
+          <meshBasicMaterial
+            map={glowTexture}
+            color={color}
+            transparent
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
         <mesh
           scale={isSelected ? HIGHLIGHT_SCALE : 1}
           onClick={handleClick}
           onPointerOver={handlePointerOver}
           onPointerOut={handlePointerOut}
         >
-          <planeGeometry args={[MARKER_SIZE, MARKER_SIZE]} />
+          <planeGeometry args={[markerSize, markerSize]} />
           <meshBasicMaterial map={texture} color={color} transparent depthWrite={false} />
         </mesh>
       </Billboard>

@@ -580,3 +580,20 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   a deliberate scope boundary, not a placeholder: the Sun, Moon, and
   deep-sky objects (nebulae/galaxies/clusters) are separate, later
   phases in the original plan and were intentionally kept out of Phase 9.
+- **Fixed after further testing**: even with the billboard fix above, a
+  single plain shaded circle for every planet still didn't read as
+  "real" — no visual distinction between a rocky planet and a gas giant,
+  and Saturn (the one planet everyone expects to recognize by its rings)
+  looked identical to the rest. `getPlanetTexture` now generates one
+  sprite per `PlanetContent.visualStyle`: `rocky` (Mercury/Venus/Mars,
+  plain shaded disc), `gasGiant` (Jupiter/Uranus/Neptune, the same disc
+  with alternating multiply-blended horizontal cloud bands), and
+  `ringed` (Saturn only — a tilted flattened annulus drawn _behind_ the
+  disc so only its two side "ears" show past the body, the standard
+  simplified ringed-planet icon look, consistent with this scene's
+  already-stylized rendering rather than true 3D ring geometry). Added
+  `PlanetContent.relativeSize` (a deliberately compressed, visually-
+  legible stand-in for "bigger vs. smaller" — true diameter ratios would
+  make Mercury an invisible speck next to Jupiter at this fixed-radius
+  rendering scale) and a soft additive glow sprite behind every body for
+  an atmospheric-halo feel.

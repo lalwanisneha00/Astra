@@ -1,3 +1,5 @@
+export type PlanetVisualStyle = 'rocky' | 'gasGiant' | 'ringed'
+
 export interface PlanetContent {
   description: string
   funFacts: string[]
@@ -15,6 +17,16 @@ export interface PlanetContent {
   rotationPeriodHours: number
   meanDistanceAu: number
   colorHex: string
+  /** Which PlanetMarker sprite variant to draw (see
+   * scene/textures/planetTexture.ts) — plain shaded disc, gas-giant
+   * cloud bands, or Saturn's rings. */
+  visualStyle: PlanetVisualStyle
+  /** Marker size relative to Earth-scale Mercury/Venus/Mars, *not* real
+   * relative diameter — true diameter ratios (Jupiter is ~29x Mercury)
+   * would make the rocky planets nearly invisible points at this app's
+   * fixed celestial-sphere rendering scale, so this is a deliberately
+   * compressed, visually-legible stand-in for "bigger vs. smaller." */
+  relativeSize: number
 }
 
 /** Real physical data (IAU / NASA planetary fact sheet figures, rounded).
@@ -37,6 +49,8 @@ export const PLANET_CONTENT: Record<string, PlanetContent> = {
     rotationPeriodHours: 1407.6,
     meanDistanceAu: 0.387,
     colorHex: '#9c9691',
+    visualStyle: 'rocky',
+    relativeSize: 0.8,
   },
   Venus: {
     description:
@@ -53,6 +67,8 @@ export const PLANET_CONTENT: Record<string, PlanetContent> = {
     rotationPeriodHours: -5832.5,
     meanDistanceAu: 0.723,
     colorHex: '#e8cda2',
+    visualStyle: 'rocky',
+    relativeSize: 1.05,
   },
   Mars: {
     description:
@@ -69,6 +85,8 @@ export const PLANET_CONTENT: Record<string, PlanetContent> = {
     rotationPeriodHours: 24.6,
     meanDistanceAu: 1.524,
     colorHex: '#c1440e',
+    visualStyle: 'rocky',
+    relativeSize: 0.85,
   },
   Jupiter: {
     description:
@@ -85,6 +103,8 @@ export const PLANET_CONTENT: Record<string, PlanetContent> = {
     rotationPeriodHours: 9.9,
     meanDistanceAu: 5.204,
     colorHex: '#d8ca9d',
+    visualStyle: 'gasGiant',
+    relativeSize: 1.9,
   },
   Saturn: {
     description:
@@ -101,6 +121,8 @@ export const PLANET_CONTENT: Record<string, PlanetContent> = {
     rotationPeriodHours: 10.7,
     meanDistanceAu: 9.573,
     colorHex: '#e3d9b8',
+    visualStyle: 'ringed',
+    relativeSize: 1.7,
   },
   Uranus: {
     description:
@@ -117,6 +139,8 @@ export const PLANET_CONTENT: Record<string, PlanetContent> = {
     rotationPeriodHours: -17.2,
     meanDistanceAu: 19.165,
     colorHex: '#9fd9e0',
+    visualStyle: 'gasGiant',
+    relativeSize: 1.3,
   },
   Neptune: {
     description:
@@ -133,5 +157,7 @@ export const PLANET_CONTENT: Record<string, PlanetContent> = {
     rotationPeriodHours: 16.1,
     meanDistanceAu: 30.178,
     colorHex: '#3e5fcc',
+    visualStyle: 'gasGiant',
+    relativeSize: 1.3,
   },
 }
