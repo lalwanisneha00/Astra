@@ -2,9 +2,12 @@ import { Canvas } from '@react-three/fiber'
 import type { StarCatalog } from '@/hooks/useStarCatalog'
 import { CameraController } from '@/scene/camera/CameraController'
 import { ConstellationLayer } from '@/scene/layers/ConstellationLayer'
+import { GridLayer } from '@/scene/layers/GridLayer'
+import { HorizonLayer } from '@/scene/layers/HorizonLayer'
 import { LabelsLayer } from '@/scene/layers/LabelsLayer'
 import { StarsLayer } from '@/scene/layers/StarsLayer'
 import type { Constellation } from '@/types/constellation'
+import type { ObserverLocation } from '@/types/coordinates'
 
 const INITIAL_FOV = 75
 const NEAR_PLANE = 0.1
@@ -16,6 +19,8 @@ const BACKGROUND_COLOR = '#04060c'
 interface SceneCanvasProps {
   starCatalog: StarCatalog
   constellations: Constellation[]
+  observer: ObserverLocation | null
+  date: Date
 }
 
 /**
@@ -23,7 +28,7 @@ interface SceneCanvasProps {
  * sphere: panning rotates it, zoom changes its FOV, and it never dollies
  * forward or back. See ARCHITECTURE.md for the full rendering model.
  */
-export function SceneCanvas({ starCatalog, constellations }: SceneCanvasProps) {
+export function SceneCanvas({ starCatalog, constellations, observer, date }: SceneCanvasProps) {
   return (
     <Canvas
       className="absolute inset-0 touch-none"
@@ -34,10 +39,12 @@ export function SceneCanvas({ starCatalog, constellations }: SceneCanvasProps) {
       <color attach="background" args={[BACKGROUND_COLOR]} />
       <CameraController />
       {/* Rendered before StarsLayer so bright star points sit visually on
-          top of the dimmer connecting lines. */}
+          top of the dimmer connecting lines/grids. */}
+      <GridLayer observer={observer} date={date} />
       <ConstellationLayer constellations={constellations} />
       <StarsLayer catalog={starCatalog} />
       <LabelsLayer constellations={constellations} />
+      <HorizonLayer observer={observer} date={date} />
     </Canvas>
   )
 }
