@@ -19,8 +19,9 @@ import type { ObserverLocation } from '@/types/coordinates'
 import type { SearchResult } from '@/types/search'
 import { LayerToggleDock } from '@/ui/controls/LayerToggleDock'
 import { LocationPicker } from '@/ui/controls/LocationPicker'
-import { TimeSlider } from '@/ui/controls/TimeSlider'
+import { TimeTravelDock } from '@/ui/controls/TimeTravelDock'
 import { TodayButton } from '@/ui/controls/TodayButton'
+import { UtcClock } from '@/ui/controls/UtcClock'
 import { ConstellationPanel } from '@/ui/panels/ConstellationPanel'
 import { DeepSkyObjectPanel } from '@/ui/panels/DeepSkyObjectPanel'
 import { MoonPanel } from '@/ui/panels/MoonPanel'
@@ -143,22 +144,23 @@ export function App() {
           horizonCullingEnabled={horizonCullingEnabled}
           altitudes={altitudes}
         />
-        <header className="pointer-events-none absolute top-4 left-4 z-10 flex flex-col items-start gap-2">
-          <GlassPanel className="pointer-events-auto px-4 py-2">
-            <h1 className="text-sm font-medium tracking-[0.2em] text-star-100 uppercase">
-              {APP_NAME}
-            </h1>
-          </GlassPanel>
+        <header className="pointer-events-none absolute top-4 left-4 z-20 flex flex-col items-start gap-2">
+          <div className="flex items-start gap-2">
+            <GlassPanel className="pointer-events-auto px-4 py-2">
+              <h1 className="text-sm font-medium tracking-[0.2em] text-star-100 uppercase">
+                {APP_NAME}
+              </h1>
+            </GlassPanel>
+            <SearchBar index={searchIndex} onSelect={handleSearchSelect} />
+          </div>
           <TodayButton onNeedManualLocation={() => setShowLocationPicker(true)} />
         </header>
-        <div className="pointer-events-none absolute top-4 left-1/2 z-20 w-[min(90vw,360px)] -translate-x-1/2">
-          <SearchBar index={searchIndex} onSelect={handleSearchSelect} />
+        <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+          <UtcClock />
         </div>
-        <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 w-[min(90vw,420px)] -translate-x-1/2">
-          <TimeSlider />
-        </div>
-        <div className="pointer-events-none absolute bottom-4 left-4 z-10">
+        <div className="pointer-events-none absolute bottom-4 left-4 z-10 flex items-end gap-2">
           <LayerToggleDock />
+          <TimeTravelDock />
         </div>
         <AnimatePresence>
           {selectedStar && (

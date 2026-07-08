@@ -871,3 +871,42 @@ false, ...)` with a real `Observer` whenever one exists — that call
   by its plain translation, proving every one of the 88 got an entry,
   not just the famous handful) without needing a component-rendering
   test harness this project doesn't have.
+
+## UX/navigation redesign
+
+A second round of user-requested refinements, tracked the same
+batch-by-batch way as the polish pass above. The prior polish pass's
+remaining batches (Today's Night Sky horizon fade, navigation tuning,
+orbit-trail fix, info-panel typography, perf/a11y review) are paused,
+not abandoned, in favor of this explicitly-reprioritized work; decluttering
+from that plan is folded into this one instead of being done twice.
+
+### Batch 1 — Compact UI chrome
+
+- **`SearchBar`** now collapses behind a small 🔎 trigger button instead
+  of permanently occupying top-center — structurally the same
+  icon-button-expands-panel pattern `LayerToggleDock` established
+  (`useState` open/close + `useDismissablePanel` for Esc/outside-click +
+  `AnimatePresence`/spring transition), with every bit of internal query/
+  keyboard-nav/results logic carried over unchanged. Its own bespoke
+  outside-click listener (which only ever closed the results dropdown,
+  not the whole bar) is gone, replaced by `useDismissablePanel` closing
+  the whole thing — simpler code, and now Escape closes it too, which it
+  didn't fully do before. Moved into the top-left header cluster
+  (alongside the `Astra` title and `TodayButton`) per the explicit ask;
+  the header's `z-index` bumped from 10 to 20 to preserve the search
+  panel's original "always on top of every other overlay" guarantee.
+- **`TimeTravelDock`** (new): identical structure to `LayerToggleDock`,
+  wrapping the existing `TimeSlider` completely unmodified as its panel
+  content. Sits beside `LayerToggleDock` at bottom-left (the two share a
+  row, each independently expanding upward above its own trigger).
+- **`UtcClock`** (new): a tiny always-visible `GlassPanel` at bottom-
+  center (the spot the permanent `TimeSlider` vacated) showing real
+  `Date.now()` in UTC, `YYYY-MM-DD` / `HH:MM:SS UTC`, `setInterval`-
+  updated every second. Deliberately **not** derived from
+  `useTimeStore.currentDate` — that's the simulated, scrubbable sky
+  date, which only changes when the (now-hidden-behind-an-icon) Time
+  Travel panel is actively scrubbing/playing, so it can't satisfy an
+  always-ticking-every-second requirement on its own. This is a
+  genuinely separate "what time is it, really, right now" reference,
+  independent of whatever date the sky is currently depicting.
