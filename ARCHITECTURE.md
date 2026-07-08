@@ -287,3 +287,53 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   and simply render without those two sections. Missing numeric fields
   (HYG has no radius/mass) show "—" rather than being fabricated or
   hidden — both explicitly the spec's own guidance for this situation.
+
+### Phase 5 — Constellations: lines, names, highlight glow, info panel
+
+- **Data**: `scripts/build-constellations.ts` fetches d3-celestial's
+  constellation names/label-positions and line figures (BSD-3-Clause —
+  see `ATTRIBUTIONS.md`), normalizes RA from d3-celestial's `[-180,180]`
+  longitude convention to this project's standard `[0,360)`, merges
+  Serpens's two disconnected regions (Caput/Cauda) into one figure since
+  they share one id, and writes all 88 as one small (~33KB) JSON file —
+  unlike the star catalog, small enough that it doesn't need magnitude
+  tiering or IndexedDB caching (`src/data/loaders/constellationLoader.ts`
+  is a plain fetch).
+- **Rendering is per-constellation, not one shared buffer**: 88 separate
+  `<lineSegments>` objects (`ConstellationFigure`), each independently
+  clickable and independently reactive to `useSelectionStore`. This is a
+  deliberate contrast with `StarsLayer`'s single-buffer/index-uniform
+  approach — at only 88 objects, separate objects are simpler and still
+  trivially cheap, whereas that approach would fall over at 40,000 stars.
+  Selection changes are low-frequency (user clicks), so plain reactive
+  Zustand + React re-renders per-figure is fine here, unlike stars' hover
+  (which stays fully imperative/shader-driven because it's high-frequency).
+- **"Glow"** is brightness + additive blending on the selected figure's
+  `lineBasicMaterial`, not a true post-processing bloom pass — no
+  EffectComposer/bloom dependency needed for a "soft glow" read at this
+  scale.
+- **Hit-testing** uses Three's built-in `Line` raycasting with a
+  FOV-scaled threshold (reusing `fovScaledPointThreshold` from Phase 4),
+  not the official IAU boundary polygons the spec suggested as an
+  alternative — simpler to implement, and "click near a line" is a
+  reasonable trade against "click anywhere in the constellation's
+  official territory." Revisit with `constellations.bounds.json` if this
+  ever feels too finicky in practice.
+- **Labels**: `@react-three/drei`'s `<Html>`, one real DOM node per
+  constellation (88 total) — no custom screen-space projection needed at
+  this scale, unlike what per-star labels would require.
+- **Facts are computed, not authored, where they can be**: zodiac
+  membership is a fixed set of 12; hemisphere is derived from the label
+  declination; "best viewing months" is a documented rough estimate from
+  RA (a well-known amateur-astronomy rule of thumb, not a precise
+  ephemeris calculation — that's what Phase 6+'s real astronomy-engine
+  integration is for); "brightest stars" is computed live by filtering
+  the already-loaded HYG catalog by constellation and sorting by
+  magnitude, and is clickable straight through to `StarPanel`. Only
+  mythology and fun facts are hand-written, for ~20 well-known
+  constellations (`src/content/constellations.ts`) — "Area" was
+  considered and deliberately dropped rather than fabricate imprecise
+  IAU sq-degree figures without a verified source.
+- `CELESTIAL_SPHERE_RADIUS` moved to `src/scene/constants.ts` now that
+  two layers (stars, constellations) need to agree on it — the point
+  where a previously-fine local constant becomes worth sharing.

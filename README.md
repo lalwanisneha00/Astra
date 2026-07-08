@@ -12,10 +12,11 @@ data credits (populated as real catalogs are integrated, starting Phase 3).
 
 ## Status
 
-**Phase 4 of 13**: click any star to see a real info panel — magnitude,
-distance, spectral class, color, constellation, RA/Dec, plus hand-written
-description and fun facts for ~25 well-known named stars. Hovering
-highlights the star under the cursor. Constellations, search, time
+**Phase 5 of 13**: all 88 IAU constellations render as connected lines
+with name labels; click one to highlight it with a soft glow and open a
+panel with zodiac/hemisphere/viewing-month facts, its brightest
+catalogued stars (clickable through to their own star panels), and
+mythology/fun facts for ~20 well-known constellations. Search, time
 travel, planets, and the rest of the phase plan are still ahead — see
 `ARCHITECTURE.md`'s phase log.
 
