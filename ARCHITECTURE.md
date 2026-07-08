@@ -243,3 +243,47 @@ coordinates.ts`'s `equatorialToCartesian` turns each shipped RA/Dec
 nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   keeps the data pipeline in the same language as the app without
   needing a bundler for one-off scripts.
+
+### Phase 4 — Selection system + reusable star info panel
+
+- **Picking** (`src/scene/picking/`): stars are raycast-picked using
+  Three's built-in `Points` intersection (via R3F's `onPointerMove`/
+  `onClick` on the `<points>` object, which reports `event.index` — the
+  hit vertex's index into the buffers). `fovScaledPointThreshold` keeps
+  the clickable radius around a star visually consistent as FOV changes
+  with zoom, updated every frame in `StarsLayer`'s existing `useFrame`.
+  GPU picking was the spec's alternative option, but raycasting is
+  simpler and plenty fast at this star count; revisit if a future,
+  denser layer (DSOs?) makes it a bottleneck.
+- **Hover highlight is shader-only** — no React state in the loop. The
+  hovered index is written straight into a ref and a `uHoveredIndex`
+  uniform (`StarsLayer`); the shaders (`starField.vert/frag.glsl`)
+  compare each point's own `aIndex` attribute against it to boost that
+  one point's size/brightness. `useSceneStore.hoveredObjectId` is also
+  updated, but guarded to only write on an actual change — there's no
+  reactive consumer of it yet, but it's cheap insurance for one that
+  shows up later (e.g. a search-result hover preview).
+- **Selection is plain Zustand + React** (`useSelectionStore`), correctly
+  low-frequency (user clicks, not per-frame) — this is the deliberate
+  contrast with hover, which stays fully imperative.
+- **Star catalog is now loaded once, in `App.tsx`**, and passed down as
+  a prop — to `SceneCanvas` → `StarsLayer` for rendering, and used
+  directly in `App.tsx` to resolve the selected star for the panel.
+  `StarsLayer` no longer calls `useStarCatalog()` itself. This was a
+  deliberate, minimal fix over introducing Context or a new store: the
+  prop path is only two components deep, so plain props are simpler and
+  more consistent with how `App.tsx` already composes things.
+- **`InfoPanel`** (`src/ui/panels/InfoPanel.tsx`) is the generic,
+  reusable panel shell every object type's panel will render through:
+  title, key/value facts, description, "Did you know?", related items.
+  Non-modal by design (`aria-modal="false"` — the sky stays interactive
+  behind it), so it deliberately does **not** trap Tab focus, but it does
+  move focus in on open, restore it on close, close on Esc, and close on
+  outside click. `StarPanel` is its first, star-specific variant.
+- **Content** (`src/content/stars.ts`): hand-written description/fun-fact
+  content only exists for ~25 well-known named stars, each verified to
+  match the catalog's exact name string before writing a word — the
+  other ~40,000+ catalog stars have no proper name or authored content
+  and simply render without those two sections. Missing numeric fields
+  (HYG has no radius/mass) show "—" rather than being fabricated or
+  hidden — both explicitly the spec's own guidance for this situation.

@@ -12,12 +12,12 @@ data credits (populated as real catalogs are integrated, starting Phase 3).
 
 ## Status
 
-**Phase 3 of 13**: a real, ~40,000-star catalog (HYG Database) renders
-with accurate positions, magnitude-based size, and real B-V-derived
-color, navigable with drag-to-pan/wheel-or-pinch-to-zoom camera controls
-with release inertia. Constellations, search, time travel, planets, and
-the rest of the phase plan are still ahead — see `ARCHITECTURE.md`'s
-phase log.
+**Phase 4 of 13**: click any star to see a real info panel — magnitude,
+distance, spectral class, color, constellation, RA/Dec, plus hand-written
+description and fun facts for ~25 well-known named stars. Hovering
+highlights the star under the cursor. Constellations, search, time
+travel, planets, and the rest of the phase plan are still ahead — see
+`ARCHITECTURE.md`'s phase log.
 
 ## Getting started
 
