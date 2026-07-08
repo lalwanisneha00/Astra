@@ -5,7 +5,6 @@ import { useConstellations } from '@/hooks/useConstellations'
 import { useHorizonCulling } from '@/hooks/useHorizonCulling'
 import { useStarCatalog } from '@/hooks/useStarCatalog'
 import { useVisibleConstellations } from '@/hooks/useVisibleConstellations'
-import { useVisibleStarCatalog } from '@/hooks/useVisibleStarCatalog'
 import { SceneCanvas } from '@/scene/Canvas/SceneCanvas'
 import { useLocationStore } from '@/state/useLocationStore'
 import { useSceneStore } from '@/state/useSceneStore'
@@ -61,19 +60,24 @@ export function App() {
     useSceneStore.getState().setFlyToTarget(target)
   }, [observer])
 
-  const altitudes = useHorizonCulling(starCatalog.stars, observer !== null, observer, currentDate)
-  const visibleCatalog = useVisibleStarCatalog(starCatalog, altitudes)
+  const horizonCullingEnabled = observer !== null
+  const altitudes = useHorizonCulling(
+    starCatalog.stars,
+    horizonCullingEnabled,
+    observer,
+    currentDate,
+  )
   const visibleConstellations = useVisibleConstellations(constellations, observer, currentDate)
 
   const selectedStar =
-    selection?.type === 'star' ? visibleCatalog.stars.find((s) => s.id === selection.id) : undefined
+    selection?.type === 'star' ? starCatalog.stars.find((s) => s.id === selection.id) : undefined
   const selectedConstellation =
     selection?.type === 'constellation'
       ? constellations.find((c) => c.id === selection.id)
       : undefined
 
   const brightestStarsInSelectedConstellation = selectedConstellation
-    ? visibleCatalog.stars
+    ? starCatalog.stars
         .filter((star) => star.constellation === selectedConstellation.id)
         .sort((a, b) => a.magnitude - b.magnitude)
         .slice(0, MAX_RELATED_STARS)
@@ -83,10 +87,12 @@ export function App() {
     <ErrorBoundary>
       <div className="relative h-dvh w-dvw overflow-hidden bg-space-950">
         <SceneCanvas
-          starCatalog={visibleCatalog}
+          starCatalog={starCatalog}
           constellations={visibleConstellations}
           observer={observer}
           date={currentDate}
+          horizonCullingEnabled={horizonCullingEnabled}
+          altitudes={altitudes}
         />
         <header className="pointer-events-none absolute top-4 left-4 z-10 flex flex-col items-start gap-2">
           <GlassPanel className="pointer-events-auto px-4 py-2">

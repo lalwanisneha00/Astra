@@ -21,6 +21,8 @@ interface SceneCanvasProps {
   constellations: Constellation[]
   observer: ObserverLocation | null
   date: Date
+  horizonCullingEnabled: boolean
+  altitudes: Float32Array | null
 }
 
 /**
@@ -28,7 +30,14 @@ interface SceneCanvasProps {
  * sphere: panning rotates it, zoom changes its FOV, and it never dollies
  * forward or back. See ARCHITECTURE.md for the full rendering model.
  */
-export function SceneCanvas({ starCatalog, constellations, observer, date }: SceneCanvasProps) {
+export function SceneCanvas({
+  starCatalog,
+  constellations,
+  observer,
+  date,
+  horizonCullingEnabled,
+  altitudes,
+}: SceneCanvasProps) {
   return (
     <Canvas
       className="absolute inset-0 z-0 touch-none"
@@ -42,7 +51,11 @@ export function SceneCanvas({ starCatalog, constellations, observer, date }: Sce
           top of the dimmer connecting lines/grids. */}
       <GridLayer observer={observer} date={date} />
       <ConstellationLayer constellations={constellations} />
-      <StarsLayer catalog={starCatalog} />
+      <StarsLayer
+        catalog={starCatalog}
+        horizonCullingEnabled={horizonCullingEnabled}
+        altitudes={altitudes}
+      />
       <LabelsLayer constellations={constellations} />
       <HorizonLayer observer={observer} date={date} />
     </Canvas>

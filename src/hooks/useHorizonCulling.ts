@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ObserverLocation } from '@/types/coordinates'
 import type { Star } from '@/types/star'
 import type { HorizonCullingRequest, HorizonCullingResponse } from '@/workers/horizonCulling.worker'
@@ -18,6 +18,19 @@ export function useHorizonCulling(
   const [altitudes, setAltitudes] = useState<Float32Array | null>(null)
   const workerRef = useRef<Worker | null>(null)
 
+  // Built once per `stars` change (a handful of times per session, as
+  // tiers load), not on every date tick during scrubbing/playback —
+  // otherwise every throttled recompute would re-map all ~40,000 stars
+  // on the main thread for no reason, since the coordinates themselves
+  // never change.
+  const raDec = useMemo(
+    () => ({
+      ra: stars.map((star) => star.equatorial.ra),
+      dec: stars.map((star) => star.equatorial.dec),
+    }),
+    [stars],
+  )
+
   useEffect(() => {
     const worker = new Worker(new URL('../workers/horizonCulling.worker.ts', import.meta.url), {
       type: 'module',
@@ -35,16 +48,16 @@ export function useHorizonCulling(
   }, [])
 
   useEffect(() => {
-    if (!enabled || !observer || stars.length === 0) return
+    if (!enabled || !observer || raDec.ra.length === 0) return
 
     const request: HorizonCullingRequest = {
-      ra: stars.map((star) => star.equatorial.ra),
-      dec: stars.map((star) => star.equatorial.dec),
+      ra: raDec.ra,
+      dec: raDec.dec,
       observer,
       dateMs: date.getTime(),
     }
     workerRef.current?.postMessage(request)
-  }, [stars, enabled, observer, date])
+  }, [raDec, enabled, observer, date])
 
   // Derived rather than reset via setState-in-effect: whatever the last
   // computation returned, it's only meaningful while culling is enabled.

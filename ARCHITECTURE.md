@@ -491,3 +491,26 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   / 365.25 days) purely for smooth animation speed — discrete jumps
   (dragging, or a future "+1 month" step button) always use
   `addGranularity`'s exact calendar arithmetic instead.
+- **Fixed after initial testing**: scrubbing the slider made the whole
+  page hang. Direct Node benchmarking of every suspect (`Horizon()`
+  itself, the full 41,500-star batch, the CPU-side filter, constellation
+  visibility) showed no single computation was individually slow enough
+  to explain it — the real cost was architectural. Phase 6's
+  `useVisibleStarCatalog` filtered the star buffers on the CPU on every
+  horizon recompute, and `StarsLayer`'s `<bufferGeometry key={count}>`
+  keyed on the resulting (almost-always-changing) count, so React/Three
+  fully disposed and recreated the geometry — a full GPU re-upload of
+  tens of thousands of points — on nearly every throttled tick while
+  dragging or playing back. Replaced with GPU-side discard: stars keep a
+  stable per-star `aAltitude` buffer attribute, updated in place
+  (`bufferAttribute.set()` + `needsUpdate`) whenever the worker returns
+  new altitudes, and the vertex/fragment shaders (`starField.vert.glsl`/
+  `starField.frag.glsl`) discard below-horizon fragments via a
+  `uHorizonCullingEnabled` uniform and `vBelowHorizon` varying. The
+  geometry itself is now keyed only on star count from catalog tier
+  loading, never touched by horizon recomputes. `useVisibleStarCatalog`
+  is deleted; `StarsLayer` renders the full, unfiltered catalog always,
+  and picking (`handlePointerMove`/`handleClick`) separately guards
+  against culled indices via the same altitude buffer so below-horizon
+  stars stay unhoverable/unclickable despite still being in the draw
+  call.

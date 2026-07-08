@@ -1,8 +1,13 @@
 varying vec3 vColor;
 varying float vTwinkle;
 varying float vHighlight;
+varying float vBelowHorizon;
 
 void main() {
+  if (vBelowHorizon > 0.5) {
+    discard;
+  }
+
   vec2 uv = gl_PointCoord - 0.5;
   float dist = length(uv);
   float edge = mix(0.5, 0.62, vHighlight);
