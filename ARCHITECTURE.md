@@ -1113,3 +1113,43 @@ from that plan is folded into this one instead of being done twice.
   `useSceneStore.setFlyToTarget` and, when the highlight maps to a
   real selectable object, `useSelectionStore.select` — opening that
   object's existing info panel exactly like clicking it in the sky.
+  Selecting a "Fly to" action closes the panel afterward, matching
+  `SearchBar`'s own close-on-select convention.
+
+### Batch 6 — Final polish pass
+
+A cross-check of every panel touched across Batches 1-5, desktop and
+mobile, rather than a new feature:
+
+- **Off-palette colors removed.** `TonightsHighlightsPanel` originally
+  color-coded each highlight's difficulty badge with Tailwind's default
+  `emerald`/`amber`/`sky` shades — none of which are part of this app's
+  actual design tokens (`src/styles/tokens.css` defines only
+  `space`/`star`/`accent`/`glass`). No existing panel in this app
+  color-codes text this way (`DSO_TYPE_META.color` is only ever used
+  for 3D marker sprites, never UI text), so the badge now renders in
+  plain `text-star-500`, consistent with every other secondary label
+  (e.g. `InfoPanel`'s fact `dt` labels).
+- **Mobile overflow guard.** The header's second row went from holding
+  one button (`TodayButton`) to two (`TodayButton` +
+  `TonightsHighlightsPanel`'s trigger) — added `flex-wrap` so the row
+  degrades to two lines on the narrowest phone widths instead of
+  overflowing the viewport edge.
+- **Panel width aligned** with the nearest analogous panel: Tonight's
+  Highlights is a content-rich detail panel like `InfoPanel`, so it now
+  shares `InfoPanel`'s exact `w-[min(90vw,380px)]` sizing instead of an
+  arbitrary `92vw`/`380px` mix.
+- **Audited and confirmed consistent, no changes needed:** every
+  overlay's spring transition (`stiffness: 320, damping: 32`,
+  `useReducedMotion` handled), the two-tier z-index scheme (`z-20` for
+  floating dropdowns/modals — header, `LocationPicker` — over `z-10`
+  for docked panels — `InfoPanel`, the bottom bars), `useDismissablePanel`
+  usage on every dismissable overlay, and `wasDrag()` coverage across
+  every clickable scene layer (stars, constellations, DSOs, Sun, Moon,
+  planets).
+
+This closes out the UX/Navigation Redesign plan (items 1-7). The
+earlier, separately-paused polish-pass batches (Today's Night Sky
+horizon fade/zenith marker, navigation tuning, orbit-trail fade,
+info-panel typography, perf/a11y review) remain paused, to be resumed
+only if explicitly requested again.

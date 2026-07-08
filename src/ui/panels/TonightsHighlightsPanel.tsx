@@ -15,12 +15,6 @@ interface TonightsHighlightsPanelProps {
   context: HighlightContext | null
 }
 
-const DIFFICULTY_COLOR: Record<Highlight['difficulty'], string> = {
-  'Naked eye': 'text-emerald-300',
-  Binoculars: 'text-amber-300',
-  Telescope: 'text-sky-300',
-}
-
 /**
  * Icon-triggered dock (mirroring `SearchBar`'s icon-expands-downward
  * pattern) surfacing what's notable in tonight's sky: bright planets,
@@ -40,6 +34,7 @@ export function TonightsHighlightsPanel({ context }: TonightsHighlightsPanelProp
   function handleFlyTo(highlight: Highlight) {
     useSceneStore.getState().setFlyToTarget(highlight.equatorial)
     if (highlight.selection) select(highlight.selection)
+    setIsOpen(false)
   }
 
   return (
@@ -58,7 +53,7 @@ export function TonightsHighlightsPanel({ context }: TonightsHighlightsPanelProp
             <GlassPanel
               ref={panelRef}
               tabIndex={-1}
-              className="flex max-h-[70vh] w-[min(92vw,380px)] flex-col gap-3 overflow-y-auto p-4 outline-none"
+              className="flex max-h-[70vh] w-[min(90vw,380px)] flex-col gap-3 overflow-y-auto p-4 outline-none"
             >
               <h2 className="text-xs font-medium tracking-wide text-star-500 uppercase">
                 Tonight&rsquo;s Highlights
@@ -82,9 +77,7 @@ export function TonightsHighlightsPanel({ context }: TonightsHighlightsPanelProp
                       </span>
                       <h3 className="text-sm font-semibold text-star-100">{highlight.title}</h3>
                     </div>
-                    <span
-                      className={`shrink-0 text-[10px] font-medium tracking-wide uppercase ${DIFFICULTY_COLOR[highlight.difficulty]}`}
-                    >
+                    <span className="shrink-0 text-[10px] font-medium tracking-wide text-star-500 uppercase">
                       {highlight.difficulty}
                     </span>
                   </div>

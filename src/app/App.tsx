@@ -170,7 +170,7 @@ export function App() {
             </GlassPanel>
             <SearchBar index={searchIndex} onSelect={handleSearchSelect} />
           </div>
-          <div className="flex items-start gap-2">
+          <div className="flex flex-wrap items-start gap-2">
             <TodayButton onNeedManualLocation={() => setShowLocationPicker(true)} />
             <TonightsHighlightsPanel context={highlightContext} />
           </div>
