@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { horizontalToEquatorial } from '@/astronomy/horizontal'
 import { useConstellations } from '@/hooks/useConstellations'
 import { useHorizonCulling } from '@/hooks/useHorizonCulling'
+import { usePlanetPositions } from '@/hooks/usePlanetPositions'
 import { useStarCatalog } from '@/hooks/useStarCatalog'
 import { useVisibleConstellations } from '@/hooks/useVisibleConstellations'
 import { SceneCanvas } from '@/scene/Canvas/SceneCanvas'
@@ -15,6 +16,7 @@ import { LocationPicker } from '@/ui/controls/LocationPicker'
 import { TimeSlider } from '@/ui/controls/TimeSlider'
 import { TodayButton } from '@/ui/controls/TodayButton'
 import { ConstellationPanel } from '@/ui/panels/ConstellationPanel'
+import { PlanetPanel } from '@/ui/panels/PlanetPanel'
 import { StarPanel } from '@/ui/panels/StarPanel'
 import { GlassPanel } from '@/ui/primitives/GlassPanel'
 import { APP_NAME } from './constants'
@@ -68,6 +70,7 @@ export function App() {
     currentDate,
   )
   const visibleConstellations = useVisibleConstellations(constellations, observer, currentDate)
+  const planets = usePlanetPositions(currentDate)
 
   const selectedStar =
     selection?.type === 'star' ? starCatalog.stars.find((s) => s.id === selection.id) : undefined
@@ -75,6 +78,8 @@ export function App() {
     selection?.type === 'constellation'
       ? constellations.find((c) => c.id === selection.id)
       : undefined
+  const selectedPlanet =
+    selection?.type === 'planet' ? planets.find((p) => p.id === selection.id) : undefined
 
   const brightestStarsInSelectedConstellation = selectedConstellation
     ? starCatalog.stars
@@ -120,6 +125,13 @@ export function App() {
               brightestStars={brightestStarsInSelectedConstellation}
               onClose={clearSelection}
               onSelectStar={(starId) => select({ type: 'star', id: starId })}
+            />
+          )}
+          {selectedPlanet && (
+            <PlanetPanel
+              key={`planet-${selectedPlanet.id}`}
+              planet={selectedPlanet}
+              onClose={clearSelection}
             />
           )}
           {showLocationPicker && (

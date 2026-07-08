@@ -514,3 +514,55 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   against culled indices via the same altitude buffer so below-horizon
   stars stay unhoverable/unclickable despite still being in the draw
   call.
+
+### Phase 9 — Planets: positions, orbits, info
+
+- **`src/astronomy/planets.ts`** is the first place `astronomy-engine`'s
+  `Body`/`GeoVector`/`EquatorFromVector` get used (previously only
+  `Horizon`/`Observer`/`SiderealTime`, for stars). `GeoVector` returns
+  geocentric J2000 equatorial Cartesian coordinates — deliberately the
+  _same_ frame the HYG star catalog is already in, so planets place via
+  the exact same `equatorialToCartesian` pipeline and cull via the exact
+  same `equatorialToHorizontal`/`Horizon()` call stars use, rather than
+  needing separate "of-date"/topocentric handling. No parallax
+  correction: at this rendering scale (a fixed-radius celestial sphere,
+  not true distances) it would be imperceptible even for Mercury/Venus.
+- **Only 7 bodies** (Mercury–Neptune; Earth excluded, Sun/Moon deferred
+  to a later phase), recomputed via a plain `useMemo` keyed on date
+  (`usePlanetPositions`) — no worker, no GPU-side discard. That machinery
+  in `StarsLayer` (Phase 8's fix) exists specifically because 40,000+
+  stars made CPU filtering and geometry remounts too expensive; at 7
+  objects, a plain per-frame-independent CPU altitude check
+  (`PlanetsLayer`, using the same `equatorialToHorizontal` stars use) is
+  trivial and doesn't need that treatment.
+- **One mesh per planet** (`PlanetMarker`): a small colored sphere plus a
+  drei `<Html>` name label, each independently reading/writing
+  `useSelectionStore` — the same per-object pattern `ConstellationFigure`
+  established (as opposed to `StarsLayer`'s single-buffer approach, which
+  only makes sense at star-catalog scale). A plain sphere (not a
+  billboarded sprite) looks like a circle from any angle for free, so no
+  camera-facing plane/texture was needed.
+- **"Orbits" reinterpreted for this rendering model**: the app has no 3D
+  solar-system view — only the observer-centered celestial sphere (see
+  "Rendering model" above) — so a true heliocentric ellipse has no direct
+  on-sky representation. `PlanetOrbitTrail` instead samples each planet's
+  own apparent position across ±90 days (`computePlanetPath`, 4-day
+  steps) and draws it as a faint line, showing the real thing this model
+  _can_ show: apparent sky motion, including retrograde loops for the
+  outer planets. Recomputed on date change same as `GridLayer`, cheap
+  enough (a few dozen `GeoVector` calls) not to need any special
+  treatment either.
+- **`src/content/planets.ts`** doubles as both structured facts _and_
+  prose, unlike `STAR_CONTENT`/`CONSTELLATION_CONTENT`: every planet's
+  diameter, mass, gravity, moon count, orbital/rotation period, and mean
+  distance are always precisely known (unlike most catalog stars), so
+  `PlanetPanel` reads them directly rather than falling back to a
+  placeholder. Jupiter/Saturn's moon counts are presented as lower bounds
+  in the prose, since new small irregular moons are still being
+  discovered.
+- **Selection/panel wiring required zero new architecture**: `'planet'`
+  was already a valid `SelectableObjectType` (from Phase 4) and
+  `useLayersStore.planets` already existed (from Phase 1) — both were
+  placeholders for exactly this phase. `PlanetPanel` follows
+  `StarPanel`/`ConstellationPanel`'s exact recipe, rendering entirely
+  through the shared `InfoPanel` shell.

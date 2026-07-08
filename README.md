@@ -12,12 +12,13 @@ data credits (populated as real catalogs are integrated, starting Phase 3).
 
 ## Status
 
-**Phase 8 of 13**: scrub time with the slider at the bottom — hours,
-days, months, or years — and watch the horizon-relative sky update
-(what's risen/set changes as you move through time); play/pause for
-continuous animation, or jump back to "Now." Search, planets, and the
-rest of the phase plan are still ahead — see
-`ARCHITECTURE.md`'s phase log.
+**Phase 9 of 13**: Mercury through Neptune now render on the sky at
+their real current positions, each clickable for a facts panel (size,
+mass, gravity, moons, orbital/rotation period) and trailing a faint line
+showing its apparent path across the sky over the next/previous few
+months. Combine with the Phase 8 time slider to watch them move. Search
+and the rest of the phase plan are still ahead — see `ARCHITECTURE.md`'s
+phase log.
 
 ## Getting started
 
