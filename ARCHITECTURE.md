@@ -54,13 +54,14 @@ astra/
 │  │  ├─ primitives/   design-system building blocks (GlassPanel, ...)
 │  │  ├─ panels/       InfoPanel + per-object-type variants (Star, Constellation, ...)
 │  │  ├─ controls/     TodayButton, LocationPicker, TimeSlider; toggle dock — Phase 12
-│  │  └─ search/       unified search — Phase 11
+│  │  └─ search/       SearchBar — unified search across stars/constellations/planets/DSOs (Phase 11)
 │  ├─ state/           Zustand stores (see below)
 │  ├─ astronomy/       coordinate transforms, sidereal time, formatting — real math, no UI
 │  ├─ data/            typed catalog loaders + IndexedDB cache (stars only — see Phase 5 log)
 │  ├─ hooks/           shared React hooks
-│  ├─ lib/             generic utilities (math, easing, motion)
-│  ├─ workers/         web workers for heavy transforms (horizon culling; search indexing later)
+│  ├─ lib/             generic utilities (math, easing, motion); search.ts is here, not workers/
+│  │                   — see Phase 11 log for why a worker turned out unnecessary
+│  ├─ workers/         web workers for heavy transforms (horizon culling)
 │  ├─ content/         authored educational copy (stars, constellations)
 │  ├─ styles/          tokens.css (design tokens) + globals.css
 │  └─ types/           shared domain types (Star, Constellation, coordinates, ...)
@@ -70,8 +71,8 @@ astra/
 └─ README.md
 ```
 
-Folders still holding only a `.gitkeep` (`ui/search`, `tests`) are
-placeholders for phases that haven't landed yet — the tree above is the
+Folders still holding only a `.gitkeep` (`tests`) are placeholders for
+phases that haven't landed yet — the tree above is the
 target shape, established up front in Phase 1 so the architecture was
 visible from the start.
 
@@ -671,3 +672,49 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   smoke test, each holding its own port — if the sky ever looks
   frozen/broken in a way a hard refresh doesn't fix, check for and kill
   stale `vite` processes before assuming it's a code bug.)
+
+### Phase 11 — Unified search
+
+- **`src/ui/search/SearchBar.tsx`** is the first thing to land in the
+  `ui/search/` folder reserved since Phase 1, and `useSceneStore.flyToTarget`
+  (also a Phase 1 placeholder, first used by Phase 7's "elegant
+  transition") now has its second consumer — selecting a search result
+  sets the exact same field `CameraController` already eases toward, so
+  no new camera-navigation code was needed at all.
+- **One index, four object types**: `useSearchIndex` (stars,
+  constellations, deep-sky objects) plus a static `PLANET_IDS` list
+  (planets don't need to be passed in — see below) flattens everything
+  into one `SearchResult[]` with a common shape (`type`, `id`, `label`,
+  `subtitle`, `rank`, `keywords`). Only _named_ stars are indexed — the
+  ~40,000 unnamed catalog entries have no string a user could type to
+  find them.
+- **No coordinates baked into the index — resolved live at pick time
+  instead.** `SearchResult` deliberately carries no `equatorial` field.
+  Planet positions change with simulated time (Phase 9); if the index
+  cached a planet's equatorial coordinate at build time, it would go
+  stale the moment the time slider moves. Since `useSearchIndex`'s
+  `useMemo` only depends on the (stable, load-once) stars/
+  constellations/DSOs arrays — never the per-date-tick `planets` array —
+  it also never rebuilds while scrubbing time, avoiding the exact class
+  of "expensive recompute on every tick" problem Phase 8's fix
+  eliminated for the star catalog. `App.tsx`'s `handleSearchSelect`
+  looks the picked result up in the live catalogs (the same
+  `.find((x) => x.id === ...)` pattern already used for
+  `selectedStar`/`selectedConstellation`/`selectedPlanet`/`selectedDso`)
+  and flies to _that_ object's current position.
+- **Ranking**: matches are tiered (exact label match > prefix > substring
+  > keyword-blob-only, the last covering a DSO's Messier number or a
+  > star's alternate designations), then sorted within a tier by `rank` —
+  > real apparent magnitude for stars/DSOs, a fixed low value for
+  > constellations/planets so these prominent, small-count object types
+  > don't lose to an incidentally-matching dim background star. Pure
+  > function (`src/lib/search.ts`), unit-tested directly.
+- **Always-visible bar, not a hidden dialog**: the spec's own wording
+  ("a search bar") ruled out an icon-triggered modal. Positioned
+  top-center at `z-20`, same layer as `LocationPicker` — both are
+  interactive overlays that need to sit above constellation labels and
+  info panels, the exact stacking bug Phase 7 had to fix once already.
+- Selecting a result both flies the camera there _and_ opens that
+  object's info panel (`select({ type, id })`), matching what clicking
+  the object directly in the sky already does — search is a shortcut to
+  the same interaction, not a separate one.

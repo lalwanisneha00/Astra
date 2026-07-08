@@ -5,6 +5,7 @@ import { useConstellations } from '@/hooks/useConstellations'
 import { useDeepSkyObjects } from '@/hooks/useDeepSkyObjects'
 import { useHorizonCulling } from '@/hooks/useHorizonCulling'
 import { usePlanetPositions } from '@/hooks/usePlanetPositions'
+import { useSearchIndex } from '@/hooks/useSearchIndex'
 import { useStarCatalog } from '@/hooks/useStarCatalog'
 import { useVisibleConstellations } from '@/hooks/useVisibleConstellations'
 import { SceneCanvas } from '@/scene/Canvas/SceneCanvas'
@@ -13,6 +14,7 @@ import { useSceneStore } from '@/state/useSceneStore'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import { useTimeStore } from '@/state/useTimeStore'
 import type { ObserverLocation } from '@/types/coordinates'
+import type { SearchResult } from '@/types/search'
 import { LocationPicker } from '@/ui/controls/LocationPicker'
 import { TimeSlider } from '@/ui/controls/TimeSlider'
 import { TodayButton } from '@/ui/controls/TodayButton'
@@ -21,6 +23,7 @@ import { DeepSkyObjectPanel } from '@/ui/panels/DeepSkyObjectPanel'
 import { PlanetPanel } from '@/ui/panels/PlanetPanel'
 import { StarPanel } from '@/ui/panels/StarPanel'
 import { GlassPanel } from '@/ui/primitives/GlassPanel'
+import { SearchBar } from '@/ui/search/SearchBar'
 import { APP_NAME } from './constants'
 import { ErrorBoundary } from './ErrorBoundary'
 
@@ -74,6 +77,7 @@ export function App() {
   )
   const visibleConstellations = useVisibleConstellations(constellations, observer, currentDate)
   const planets = usePlanetPositions(currentDate)
+  const searchIndex = useSearchIndex(starCatalog.stars, constellations, deepSkyObjects)
 
   const selectedStar =
     selection?.type === 'star' ? starCatalog.stars.find((s) => s.id === selection.id) : undefined
@@ -92,6 +96,25 @@ export function App() {
         .sort((a, b) => a.magnitude - b.magnitude)
         .slice(0, MAX_RELATED_STARS)
     : []
+
+  // Resolves the result's *current* position from the live catalogs
+  // rather than a coordinate baked into the search index, so a planet's
+  // fly-to target is never a stale snapshot from whenever the index was
+  // built (see useSearchIndex).
+  function handleSearchSelect(result: SearchResult) {
+    select({ type: result.type, id: result.id })
+
+    const target =
+      result.type === 'star'
+        ? starCatalog.stars.find((star) => star.id === result.id)?.equatorial
+        : result.type === 'constellation'
+          ? constellations.find((c) => c.id === result.id)?.labelPosition
+          : result.type === 'planet'
+            ? planets.find((planet) => planet.id === result.id)?.equatorial
+            : deepSkyObjects.find((dso) => dso.id === result.id)?.equatorial
+
+    if (target) useSceneStore.getState().setFlyToTarget(target)
+  }
 
   return (
     <ErrorBoundary>
@@ -113,6 +136,9 @@ export function App() {
           </GlassPanel>
           <TodayButton onNeedManualLocation={() => setShowLocationPicker(true)} />
         </header>
+        <div className="pointer-events-none absolute top-4 left-1/2 z-20 w-[min(90vw,360px)] -translate-x-1/2">
+          <SearchBar index={searchIndex} onSelect={handleSearchSelect} />
+        </div>
         <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 w-[min(90vw,420px)] -translate-x-1/2">
           <TimeSlider />
         </div>
