@@ -1050,3 +1050,66 @@ from that plan is folded into this one instead of being done twice.
   avoidance would need a shared per-frame registry between two
   otherwise-independent layers; left as a possible future refinement
   rather than adding that coordination now.
+
+### Batch 5 — Tonight's Highlights
+
+- **`src/astronomy/highlights.ts`** — a pluggable detector engine.
+  `HighlightContext` bundles the current date, observer, and already-
+  computed planets/moon/DSOs/constellations; one independent detector
+  function exists per event category (bright planets, the Moon, meteor
+  showers, conjunctions, eclipses, notable deep-sky objects, prominent
+  constellations), and `getTonightsHighlights(context, limit)` runs all
+  of them, concatenates, sorts by `priority` (ascending — lower is more
+  significant), and truncates. Adding a future event type (comets, say,
+  if an orbital-element data source is ever integrated — none exists
+  today, in this project or in `astronomy-engine`) means writing one
+  more detector function, not touching the others.
+- **Real rise/set/culmination** for planets and the Moon via
+  `SearchRiseSet`/`SearchHourAngle` (only ~8 bodies, cheap enough to
+  call directly, unlike the star catalog) — gives genuine "rises around
+  23:14 UTC" / "highest around 02:40 UTC" timing and a compass
+  direction, not a guess. DSOs, constellations, and meteor showers use
+  simpler, honest qualitative descriptions instead ("Visible now",
+  "Best viewed after midnight") to keep the feature's total cost
+  bounded — see the doc comment on `computeBodyVisibility`.
+- **`src/content/meteorShowers.ts`** — a small hand-authored calendar of
+  9 major annual showers (real peak dates, ZHR, radiant position),
+  cross-checked the same way `PLANET_CONTENT`'s physical facts are;
+  `astronomy-engine` has no built-in meteor data. A shower counts as
+  "active" within its own `activeWindowDays` of its peak date (checked
+  against the nearest calendar-year anniversary, so the check works
+  correctly right across a year boundary, e.g. the Ursids in late
+  December).
+- **Conjunctions** are detected directly from angular separation (law
+  of cosines) between every pair of planet/Moon positions already
+  computed elsewhere in the app — no new ephemeris calls. **Eclipses**
+  use `SearchLunarEclipse`/`SearchLocalSolarEclipse`, filtered to a
+  7-day lookahead window and to eclipses actually above (or just below,
+  for lunar, allowing for twilight visibility) the horizon; the solar
+  eclipse highlight explicitly calls out eye-protection safety in its
+  copy, not just the astronomical facts.
+- **Notable DSOs and prominent constellations** reuse each object's own
+  real position: a DSO must currently be above the horizon (sorted by
+  magnitude, brightest first, capped at 4), and a constellation must
+  currently be more than 20° above the horizon (capped at 2) — real
+  geometry decides "prominent right now," not a rough month-based
+  heuristic.
+- **`src/hooks/useTonightsHighlights.ts`** wraps the engine behind the
+  project's shared `throttle` utility (the same one `TimeSlider` uses
+  for date commits), but at a much coarser 2-second interval — this
+  engine runs several numerical searches per body plus two eclipse
+  searches, meaningfully heavier than a single `Horizon()` call, so
+  continuous time-scrubbing or playback must not re-run it on every
+  tick. Returns `[]` outright in explore mode (no real observer to
+  compute rise/set from) rather than resetting state from inside the
+  effect, sidestepping a "setState synchronously in an effect" lint
+  trap.
+- **`src/ui/panels/TonightsHighlightsPanel.tsx`** — an icon-triggered
+  panel (✨, the same icon-expands-downward pattern as `SearchBar`),
+  gated to only render once a real observer exists, placed in the
+  header next to the "Today's Night Sky" button. Each entry shows the
+  highlight's icon/title/summary/why-it's-special/direction/timing/
+  visibility/difficulty and a "Fly to" button that reuses
+  `useSceneStore.setFlyToTarget` and, when the highlight maps to a
+  real selectable object, `useSelectionStore.select` — opening that
+  object's existing info panel exactly like clicking it in the sky.

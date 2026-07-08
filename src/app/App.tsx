@@ -1,5 +1,6 @@
 import { AnimatePresence } from 'framer-motion'
 import { useEffect, useMemo, useState } from 'react'
+import type { HighlightContext } from '@/astronomy/highlights'
 import { horizontalToEquatorial } from '@/astronomy/horizontal'
 import { useConstellations } from '@/hooks/useConstellations'
 import { useDeepSkyObjects } from '@/hooks/useDeepSkyObjects'
@@ -28,6 +29,7 @@ import { MoonPanel } from '@/ui/panels/MoonPanel'
 import { PlanetPanel } from '@/ui/panels/PlanetPanel'
 import { StarPanel } from '@/ui/panels/StarPanel'
 import { SunPanel } from '@/ui/panels/SunPanel'
+import { TonightsHighlightsPanel } from '@/ui/panels/TonightsHighlightsPanel'
 import { GlassPanel } from '@/ui/primitives/GlassPanel'
 import { SearchBar } from '@/ui/search/SearchBar'
 import { APP_NAME } from './constants'
@@ -86,6 +88,21 @@ export function App() {
   const sun = useSunPosition(currentDate)
   const moon = useMoonPosition(currentDate, observer)
   const searchIndex = useSearchIndex(starCatalog.stars, constellations, deepSkyObjects)
+
+  const highlightContext = useMemo<HighlightContext | null>(
+    () =>
+      observer
+        ? {
+            date: currentDate,
+            observer,
+            planets,
+            moon,
+            dsos: deepSkyObjects,
+            constellations,
+          }
+        : null,
+    [observer, currentDate, planets, moon, deepSkyObjects, constellations],
+  )
 
   const selectedStar =
     selection?.type === 'star' ? starCatalog.stars.find((s) => s.id === selection.id) : undefined
@@ -153,7 +170,10 @@ export function App() {
             </GlassPanel>
             <SearchBar index={searchIndex} onSelect={handleSearchSelect} />
           </div>
-          <TodayButton onNeedManualLocation={() => setShowLocationPicker(true)} />
+          <div className="flex items-start gap-2">
+            <TodayButton onNeedManualLocation={() => setShowLocationPicker(true)} />
+            <TonightsHighlightsPanel context={highlightContext} />
+          </div>
         </header>
         <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
           <UtcClock />
