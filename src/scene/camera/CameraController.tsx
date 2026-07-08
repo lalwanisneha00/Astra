@@ -34,6 +34,18 @@ function distanceBetween(a: PointerPoint, b: PointerPoint): number {
  * wheel and pinch change its FOV. Both are eased/damped every frame in
  * `useFrame` rather than through React state, so navigating the sky never
  * triggers a re-render. Renders nothing itself.
+ *
+ * `yawRef` (horizontal rotation) is a plain unbounded accumulator — it was
+ * never clamped or wrapped, so rotation was always mathematically
+ * unlimited. What *did* limit it in practice: a mouse drag is tracked by
+ * absolute screen position, so a continuous drag runs out of physical
+ * screen to cross well before completing a full 360° turn, forcing a
+ * release-and-regrab that reads as "stopping." Mouse drags now use the
+ * Pointer Lock API (relative `movementX`/`movementY` deltas instead of
+ * absolute position — see `handlePointerMove`), removing that screen-edge
+ * limit entirely. Touch drags don't need this: repeated swipes already
+ * accumulate into the same `yawRef` with no such bound, a normal mobile
+ * pattern.
  */
 export function CameraController() {
   const { camera, gl } = useThree()
@@ -74,6 +86,12 @@ export function CameraController() {
         isDraggingRef.current = true
         lastPointer = { x: event.clientX, y: event.clientY }
         lastMoveTime = performance.now()
+        // Best-effort: if denied/unsupported, dragging still works via
+        // the absolute-position fallback in handlePointerMove, just
+        // bounded by the screen edge again.
+        if (event.pointerType === 'mouse') {
+          canvas.requestPointerLock?.()?.catch(() => {})
+        }
       } else if (activePointers.size === 2) {
         isDraggingRef.current = false
         const [a, b] = [...activePointers.values()]
@@ -99,12 +117,24 @@ export function CameraController() {
         return
       }
 
-      if (!isDraggingRef.current || !lastPointer) return
+      if (!isDraggingRef.current) return
+
+      const isPointerLocked = document.pointerLockElement === canvas
+      let dx: number
+      let dy: number
+      if (isPointerLocked) {
+        // Relative deltas — unbounded by the physical screen edge, since
+        // the OS cursor doesn't move at all while locked.
+        dx = event.movementX
+        dy = event.movementY
+      } else {
+        if (!lastPointer) return
+        dx = event.clientX - lastPointer.x
+        dy = event.clientY - lastPointer.y
+      }
 
       const now = performance.now()
       const deltaTime = Math.max((now - lastMoveTime) / 1000, 1 / 240)
-      const dx = event.clientX - lastPointer.x
-      const dy = event.clientY - lastPointer.y
       const radPerPixel = THREE.MathUtils.degToRad(perspectiveCamera.fov) / canvas.clientHeight
 
       const yawDelta = dx * radPerPixel
@@ -129,6 +159,21 @@ export function CameraController() {
       if (activePointers.size === 0) {
         isDraggingRef.current = false
         lastPointer = null
+        if (document.pointerLockElement === canvas) {
+          document.exitPointerLock()
+        }
+      }
+    }
+
+    // The browser can also exit pointer lock on its own (e.g. Escape,
+    // per spec) — if that happens mid-drag, end the drag cleanly rather
+    // than risk a spurious jump from stale absolute coordinates once the
+    // cursor reappears somewhere else on screen. The user can just
+    // click-drag again to resume.
+    const handlePointerLockChange = () => {
+      if (document.pointerLockElement !== canvas && isDraggingRef.current) {
+        isDraggingRef.current = false
+        lastPointer = null
       }
     }
 
@@ -146,6 +191,7 @@ export function CameraController() {
     canvas.addEventListener('pointercancel', handlePointerUp)
     canvas.addEventListener('wheel', handleWheel, { passive: false })
     canvas.addEventListener('contextmenu', handleContextMenu)
+    document.addEventListener('pointerlockchange', handlePointerLockChange)
 
     return () => {
       canvas.removeEventListener('pointerdown', handlePointerDown)
@@ -154,6 +200,10 @@ export function CameraController() {
       canvas.removeEventListener('pointercancel', handlePointerUp)
       canvas.removeEventListener('wheel', handleWheel)
       canvas.removeEventListener('contextmenu', handleContextMenu)
+      document.removeEventListener('pointerlockchange', handlePointerLockChange)
+      if (document.pointerLockElement === canvas) {
+        document.exitPointerLock()
+      }
     }
   }, [gl, perspectiveCamera])
 

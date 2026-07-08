@@ -910,3 +910,29 @@ from that plan is folded into this one instead of being done twice.
   always-ticking-every-second requirement on its own. This is a
   genuinely separate "what time is it, really, right now" reference,
   independent of whatever date the sky is currently depicting.
+
+### Batch 2 — Infinite rotation
+
+- **Investigated a reported bug ("rotation stops after one full turn")
+  before touching any code**: traced every read/write of `yawRef` in
+  `CameraController.tsx` and confirmed it was always a plain unbounded
+  accumulator — never clamped, never wrapped. The math was never the
+  problem. The real cause: mouse-drag rotation was tracked via absolute
+  screen coordinates (`event.clientX`/`clientY`), so a continuous drag
+  runs out of physical screen to cross well before completing even one
+  360° turn, forcing a release-and-regrab that reads as "stopping."
+- **Fixed with the Pointer Lock API**, the standard solution for exactly
+  this class of interface: on mouse `pointerdown`,
+  `canvas.requestPointerLock()` (best-effort — if denied/unsupported,
+  dragging still works via the prior absolute-position path, just
+  bounded by the screen edge again); while locked, `handlePointerMove`
+  reads `event.movementX`/`movementY` (relative deltas, no screen-edge
+  bound at all) instead of computing a delta from the last absolute
+  position. Lock releases on `pointerup`/`pointercancel`, and a
+  `pointerlockchange` listener ends the drag cleanly if the browser
+  exits the lock on its own (e.g. Escape, per spec) rather than risk a
+  spurious jump from stale coordinates once the cursor reappears
+  elsewhere on screen.
+- Touch dragging needed no changes — repeated swipes already accumulate
+  into the same unbounded `yawRef`, a normal mobile pattern with no
+  equivalent screen-edge limit to begin with.
