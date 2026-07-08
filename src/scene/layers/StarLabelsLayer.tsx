@@ -2,15 +2,27 @@ import { Html } from '@react-three/drei'
 import { useMemo } from 'react'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { equatorialToHorizontal } from '@/astronomy/horizontal'
+import { useThrottledFov } from '@/hooks/useThrottledFov'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
+import { starMagnitudeCutoff } from '@/scene/exploration'
+import { fovScaledLabelSeparation, selectDeclutteredLabels } from '@/scene/picking/labelDeclutter'
 import { useLayersStore } from '@/state/useLayersStore'
 import type { ObserverLocation } from '@/types/coordinates'
 import type { Star } from '@/types/star'
+
+// Re-checking FOV every 3 degrees of zoom is plenty responsive without
+// re-sorting/filtering thousands of candidates every single frame.
+const FOV_THROTTLE_STEP = 3
 
 interface StarLabelsLayerProps {
   stars: Star[]
   observer: ObserverLocation | null
   date: Date
+  /** Whether Explore Mode's Earth-to-Universe progressive reveal
+   * applies (see scene/exploration.ts) — a star not yet faded in
+   * shouldn't have a visible name label either. Always false in
+   * observer mode, unaffected by any of this. */
+  explorationEnabled: boolean
 }
 
 /** Named star labels, off by default (see useLayersStore) — up to
@@ -18,9 +30,22 @@ interface StarLabelsLayerProps {
  * drei <Html> nodes to clutter the sky badly, unlike constellation
  * names (88, always on). Horizon culling here is a plain per-star CPU
  * check, same reasoning as PlanetsLayer/DeepSkyLayer: this list is
- * nowhere near the scale that needed StarsLayer's GPU-side discard. */
-export function StarLabelsLayer({ stars, observer, date }: StarLabelsLayerProps) {
+ * nowhere near the scale that needed StarsLayer's GPU-side discard.
+ *
+ * Labels are further thinned by `selectDeclutteredLabels` (brightest
+ * first, skipping anything that would visually overlap a more
+ * prominent label already shown) and, in explore mode, hidden entirely
+ * for stars not yet revealed at the current zoom depth — no point
+ * labeling a star that's still faded out.
+ */
+export function StarLabelsLayer({
+  stars,
+  observer,
+  date,
+  explorationEnabled,
+}: StarLabelsLayerProps) {
   const showNames = useLayersStore((state) => state.starNames)
+  const fov = useThrottledFov(FOV_THROTTLE_STEP)
 
   const namedStars = useMemo(() => stars.filter((star) => star.names.length > 0), [stars])
 
@@ -31,11 +56,29 @@ export function StarLabelsLayer({ stars, observer, date }: StarLabelsLayerProps)
     )
   }, [namedStars, observer, date])
 
+  const revealedStars = useMemo(() => {
+    if (!explorationEnabled) return visibleStars
+    const cutoff = starMagnitudeCutoff(fov)
+    return visibleStars.filter((star) => star.magnitude <= cutoff)
+  }, [visibleStars, explorationEnabled, fov])
+
+  const declutteredStars = useMemo(() => {
+    const candidates = revealedStars.map((star) => ({
+      id: star.id,
+      priority: star.magnitude,
+      ra: star.equatorial.ra,
+      dec: star.equatorial.dec,
+    }))
+    const selected = selectDeclutteredLabels(candidates, fovScaledLabelSeparation(fov))
+    const selectedIds = new Set(selected.map((candidate) => candidate.id))
+    return revealedStars.filter((star) => selectedIds.has(star.id))
+  }, [revealedStars, fov])
+
   if (!showNames) return null
 
   return (
     <>
-      {visibleStars.map((star) => {
+      {declutteredStars.map((star) => {
         const [x, y, z] = equatorialToCartesian(star.equatorial)
         return (
           <Html

@@ -1013,3 +1013,40 @@ from that plan is folded into this one instead of being done twice.
   Level-1 baseline); constellation lines/names are unaffected (already
   gated by their own toggle, already part of the Level-1 baseline per
   the spec).
+
+### Batch 4 — Smart label visibility & collision avoidance
+
+- **`src/scene/picking/labelDeclutter.ts`** (pure, tested):
+  `selectDeclutteredLabels` greedily walks a priority-sorted candidate
+  list (most prominent first) and skips any candidate within a minimum
+  angular separation of an already-accepted one — O(n·k), not O(n²),
+  since rejected candidates never get compared against each other.
+  Angular separation on the celestial sphere stands in for true
+  per-frame 2D screen-space distance (which would need re-projecting
+  every candidate every frame — real cost at thousands of star labels);
+  `fovScaledLabelSeparation` scales the threshold by current FOV so the
+  same _on-screen_ gap is respected at any zoom, the exact reasoning
+  `fovScaledPointThreshold` already established for click targets.
+- **`useThrottledFov(step)`** (new hook): quantizes camera FOV into
+  `step`-degree buckets and only triggers a re-render when the bucket
+  changes — needed because `useSceneStore`'s reactive `fov` field
+  updates nearly every frame during an active zoom (`CameraController`
+  writes it that often), and re-sorting/re-filtering a candidate list
+  of thousands of star labels every single frame would be wasteful for
+  a feature that only needs to change occasionally as the user zooms.
+- **`StarLabelsLayer`** now applies three filters before rendering a
+  label: horizon visibility (existing), Explore Mode's reveal cutoff
+  (new — a star that's still faded out per Batch 3 shouldn't have a
+  visible name either), and the declutter pass (new). **`LabelsLayer`**
+  (constellation names) gets the same declutter pass; since a
+  constellation has no natural "priority" the way star magnitude gives
+  one, declaration order stands in — the goal there is purely stopping
+  two labels from visually overlapping in crowded regions (e.g.
+  Scorpius/Sagittarius/Ophiuchus), not ranking importance.
+- **Deliberately scoped to per-layer, not cross-layer, collision
+  avoidance** — star labels declutter among themselves and
+  constellation names declutter among themselves, but the two systems
+  don't currently coordinate with each other. True cross-layer
+  avoidance would need a shared per-frame registry between two
+  otherwise-independent layers; left as a possible future refinement
+  rather than adding that coordination now.

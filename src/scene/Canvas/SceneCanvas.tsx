@@ -75,7 +75,12 @@ export function SceneCanvas({
         explorationEnabled={!horizonCullingEnabled}
       />
       <LabelsLayer constellations={constellations} />
-      <StarLabelsLayer stars={starCatalog.stars} observer={observer} date={date} />
+      <StarLabelsLayer
+        stars={starCatalog.stars}
+        observer={observer}
+        date={date}
+        explorationEnabled={!horizonCullingEnabled}
+      />
       <DeepSkyLayer objects={deepSkyObjects} observer={observer} date={date} />
       <PlanetsLayer observer={observer} date={date} />
       {isAboveHorizon(sun.equatorial) && <SunMarker sun={sun} />}
