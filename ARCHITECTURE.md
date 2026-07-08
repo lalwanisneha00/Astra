@@ -53,7 +53,7 @@ astra/
 │  ├─ ui/
 │  │  ├─ primitives/   design-system building blocks (GlassPanel, ...)
 │  │  ├─ panels/       InfoPanel + per-object-type variants (Star, Constellation, ...)
-│  │  ├─ controls/     toggle dock, time slider, location picker — Phase 7/8/12
+│  │  ├─ controls/     TodayButton, LocationPicker; toggle dock/time slider — Phase 8/12
 │  │  └─ search/       unified search — Phase 11
 │  ├─ state/           Zustand stores (see below)
 │  ├─ astronomy/       coordinate transforms, sidereal time, formatting — real math, no UI
@@ -70,10 +70,10 @@ astra/
 └─ README.md
 ```
 
-Folders still holding only a `.gitkeep` (`ui/controls`, `ui/search`,
-`tests`) are placeholders for phases that haven't landed yet — the tree
-above is the target shape, established up front in Phase 1 so the
-architecture was visible from the start.
+Folders still holding only a `.gitkeep` (`ui/search`, `tests`) are
+placeholders for phases that haven't landed yet — the tree above is the
+target shape, established up front in Phase 1 so the architecture was
+visible from the start.
 
 ## State management
 
@@ -398,3 +398,36 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   figure can be genuinely half-risen (this doesn't clip the below-
   horizon half of a partial figure, just decides whether to draw the
   whole thing).
+
+### Phase 7 — Today's Night Sky: geolocation + manual fallback + orientation
+
+- **`TodayButton`** requests real geolocation and, on success, switches
+  straight into observer mode using the device's actual coordinates and
+  the current time. Denied, unavailable, or timed-out geolocation opens
+  **`LocationPicker`** instead of dead-ending, per the spec's explicit
+  requirement — city search or manual lat/lon with range validation.
+- **`src/data/cities.ts`**: ~130 major world cities, hand-compiled
+  rather than pulled from an external dataset. A proper geocoding
+  database (checked: `dr5hn/countries-states-cities-database`) runs to
+  46MB uncompressed — wildly disproportionate for "let someone find
+  their city," especially with exact-coordinate entry sitting right next
+  to it as a fallback. City coordinates are well-established public
+  facts (unlike, say, a specific star's exact distance), so hand-
+  compiling was the proportionate call here, unlike the automated
+  pipelines for HYG/d3-celestial where the data genuinely couldn't be
+  reasonably authored by hand.
+- **Elegant transition** (the spec's own phrase, and a named "common
+  issue" if skipped): entering observer mode now eases the camera to
+  look roughly south, partway up the sky, rather than leaving it
+  pointed wherever explore mode happened to be facing.
+  `CameraController` eases toward `useSceneStore.flyToTarget` — Phase
+  1's placeholder field for Phase 11's search, now with its first real
+  consumer. Reaching it required inverting the camera's own yaw/pitch →
+  forward-vector formula (`src/scene/camera/orientation.ts`); validated
+  by round-tripping through that _same_ forward-vector formula in the
+  test, not just asserting the inverse looks right.
+- **`DevObserverToggle`** (Phase 6) is gone — replaced by the real
+  trigger it was always meant to be temporary scaffolding for.
+- **`useDismissablePanel`** extracted out of `InfoPanel` (focus-on-open,
+  restore-on-close, Esc, outside-click) now that `LocationPicker` is a
+  second, independent consumer of the exact same behavior.

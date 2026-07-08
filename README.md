@@ -12,12 +12,12 @@ data credits (populated as real catalogs are integrated, starting Phase 3).
 
 ## Status
 
-**Phase 6 of 13**: real equatorial↔horizontal astronomy math is in
-place, with equatorial/horizontal coordinate grids, a horizon ring with
-N/S/E/W markers, and worker-computed horizon culling that hides
-below-the-horizon stars — all exercised via a temporary dev toggle until
-the real "Today's Night Sky" UI arrives in Phase 7. Search, time travel,
-planets, and the rest of the phase plan are still ahead — see
+**Phase 7 of 13**: click "Today's Night Sky" for your real, current sky
+— it requests your location and shows only what's above your horizon
+right now, correctly oriented; if location access is denied or
+unavailable, a city search / manual coordinates picker opens instead.
+Search, time travel, planets, and the rest of the phase plan are still
+ahead — see
 `ARCHITECTURE.md`'s phase log.
 
 ## Getting started
