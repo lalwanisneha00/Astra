@@ -13,6 +13,7 @@ import { useSelectionStore } from '@/state/useSelectionStore'
 import { useTimeStore } from '@/state/useTimeStore'
 import type { ObserverLocation } from '@/types/coordinates'
 import { LocationPicker } from '@/ui/controls/LocationPicker'
+import { TimeSlider } from '@/ui/controls/TimeSlider'
 import { TodayButton } from '@/ui/controls/TodayButton'
 import { ConstellationPanel } from '@/ui/panels/ConstellationPanel'
 import { StarPanel } from '@/ui/panels/StarPanel'
@@ -95,6 +96,9 @@ export function App() {
           </GlassPanel>
           <TodayButton onNeedManualLocation={() => setShowLocationPicker(true)} />
         </header>
+        <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 w-[min(90vw,420px)] -translate-x-1/2">
+          <TimeSlider />
+        </div>
         <AnimatePresence>
           {selectedStar && (
             <StarPanel
