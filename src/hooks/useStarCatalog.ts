@@ -3,6 +3,7 @@ import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { loadStarTier, type StarTierData, type StarTierName } from '@/data/loaders/starLoader'
 import { clamp } from '@/lib/math'
 import { useDataStore } from '@/state/useDataStore'
+import type { Star } from '@/types/star'
 
 // Matches the celestial sphere radius the camera and StarsLayer assume.
 const SPHERE_RADIUS = 150
@@ -20,7 +21,17 @@ export interface StarRenderBuffers {
   sizes: Float32Array
   colors: Float32Array
   phases: Float32Array
+  /** Each star's own index, 0..count-1 — lets the shader identify the
+   * hovered point via a uHoveredIndex uniform (see StarsLayer). */
+  indices: Float32Array
   count: number
+}
+
+export interface StarCatalog {
+  buffers: StarRenderBuffers
+  /** Index-aligned with `buffers` — stars[i] describes the star rendered
+   * at buffers.positions[i*3..i*3+2], etc. */
+  stars: Star[]
 }
 
 const EMPTY_BUFFERS: StarRenderBuffers = {
@@ -28,8 +39,11 @@ const EMPTY_BUFFERS: StarRenderBuffers = {
   sizes: new Float32Array(0),
   colors: new Float32Array(0),
   phases: new Float32Array(0),
+  indices: new Float32Array(0),
   count: 0,
 }
+
+const EMPTY_CATALOG: StarCatalog = { buffers: EMPTY_BUFFERS, stars: [] }
 
 /** Bigger point for brighter (lower/negative magnitude) stars. */
 export function magnitudeToPointSize(mag: number): number {
@@ -45,13 +59,33 @@ export function hexToRgb01(hex: string): [number, number, number] {
   ]
 }
 
-/** Converts one fetched tier's columnar data into shader-ready buffers. */
-function tierToBuffers(tier: StarTierData): StarRenderBuffers {
+function tierRowToStar(tier: StarTierData, i: number): Star {
+  return {
+    id: tier.id[i] ?? String(i),
+    names: tier.names[i] ?? [],
+    magnitude: tier.mag[i] ?? 0,
+    absoluteMagnitude: tier.absMag[i] ?? 0,
+    distanceLy: tier.distLy[i] ?? 0,
+    spectralClass: tier.spect[i] ?? null,
+    colorIndex: tier.ci[i] ?? 0,
+    colorHex: tier.colorHex[i] ?? '#ffffff',
+    temperatureK: tier.temperatureK[i] ?? 0,
+    luminositySolar: tier.lum[i] ?? null,
+    constellation: tier.con[i] ?? null,
+    equatorial: { ra: tier.ra[i] ?? 0, dec: tier.dec[i] ?? 0 },
+  }
+}
+
+/** Converts one fetched tier's columnar data into shader-ready buffers
+ * plus its index-aligned Star domain objects. */
+function tierToCatalog(tier: StarTierData): StarCatalog {
   const { count } = tier
   const positions = new Float32Array(count * 3)
   const sizes = new Float32Array(count)
   const colors = new Float32Array(count * 3)
   const phases = new Float32Array(count)
+  const indices = new Float32Array(count)
+  const stars: Star[] = new Array(count)
 
   for (let i = 0; i < count; i++) {
     const [x, y, z] = equatorialToCartesian({ ra: tier.ra[i] ?? 0, dec: tier.dec[i] ?? 0 })
@@ -67,52 +101,62 @@ function tierToBuffers(tier: StarTierData): StarRenderBuffers {
     colors[i * 3 + 2] = b
 
     phases[i] = Math.random() * Math.PI * 2
+    indices[i] = i
+
+    stars[i] = tierRowToStar(tier, i)
   }
 
-  return { positions, sizes, colors, phases, count }
+  return { buffers: { positions, sizes, colors, phases, indices, count }, stars }
 }
 
-function mergeBuffers(a: StarRenderBuffers, b: StarRenderBuffers): StarRenderBuffers {
-  const count = a.count + b.count
+function mergeCatalogs(a: StarCatalog, b: StarCatalog): StarCatalog {
+  const count = a.buffers.count + b.buffers.count
   const positions = new Float32Array(count * 3)
   const sizes = new Float32Array(count)
   const colors = new Float32Array(count * 3)
   const phases = new Float32Array(count)
+  const indices = new Float32Array(count)
 
-  positions.set(a.positions, 0)
-  positions.set(b.positions, a.count * 3)
-  sizes.set(a.sizes, 0)
-  sizes.set(b.sizes, a.count)
-  colors.set(a.colors, 0)
-  colors.set(b.colors, a.count * 3)
-  phases.set(a.phases, 0)
-  phases.set(b.phases, a.count)
+  positions.set(a.buffers.positions, 0)
+  positions.set(b.buffers.positions, a.buffers.count * 3)
+  sizes.set(a.buffers.sizes, 0)
+  sizes.set(b.buffers.sizes, a.buffers.count)
+  colors.set(a.buffers.colors, 0)
+  colors.set(b.buffers.colors, a.buffers.count * 3)
+  phases.set(a.buffers.phases, 0)
+  phases.set(b.buffers.phases, a.buffers.count)
+  // Indices renumber across the merge so they stay 0..count-1 overall,
+  // matching the concatenated stars array below.
+  for (let i = 0; i < count; i++) indices[i] = i
 
-  return { positions, sizes, colors, phases, count }
+  return {
+    buffers: { positions, sizes, colors, phases, indices, count },
+    stars: [...a.stars, ...b.stars],
+  }
 }
 
 /**
  * Loads the star catalog tier by tier (brightest first, for instant first
- * paint) and merges each newly-arrived tier into a single growing buffer
- * set. Loading happens a handful of times per session, not per frame, so
- * plain React state here is fine — this is not part of the render loop.
+ * paint) and merges each newly-arrived tier into a single growing catalog.
+ * Loading happens a handful of times per session, not per frame, so plain
+ * React state here is fine — this is not part of the render loop.
  */
-export function useStarCatalog(): StarRenderBuffers {
-  const [buffers, setBuffers] = useState<StarRenderBuffers>(EMPTY_BUFFERS)
+export function useStarCatalog(): StarCatalog {
+  const [catalog, setCatalog] = useState<StarCatalog>(EMPTY_CATALOG)
 
   useEffect(() => {
     let cancelled = false
 
     async function loadAll() {
-      let merged = EMPTY_BUFFERS
+      let merged = EMPTY_CATALOG
       for (const tierName of TIER_ORDER) {
         if (cancelled) return
         useDataStore.getState().setCatalogStatus(tierName, 'loading')
         try {
           const tierData = await loadStarTier(tierName)
-          merged = mergeBuffers(merged, tierToBuffers(tierData))
+          merged = mergeCatalogs(merged, tierToCatalog(tierData))
           useDataStore.getState().setCatalogStatus(tierName, 'loaded')
-          if (!cancelled) setBuffers(merged)
+          if (!cancelled) setCatalog(merged)
         } catch (error) {
           useDataStore.getState().setCatalogStatus(tierName, 'error')
           useDataStore
@@ -129,5 +173,5 @@ export function useStarCatalog(): StarRenderBuffers {
     }
   }, [])
 
-  return buffers
+  return catalog
 }

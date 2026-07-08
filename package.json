@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@react-three/fiber": "^9.6.1",
+    "framer-motion": "^12.42.2",
     "idb": "^8.0.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
