@@ -12,12 +12,12 @@ data credits (populated as real catalogs are integrated, starting Phase 3).
 
 ## Status
 
-**Phase 5 of 13**: all 88 IAU constellations render as connected lines
-with name labels; click one to highlight it with a soft glow and open a
-panel with zodiac/hemisphere/viewing-month facts, its brightest
-catalogued stars (clickable through to their own star panels), and
-mythology/fun facts for ~20 well-known constellations. Search, time
-travel, planets, and the rest of the phase plan are still ahead — see
+**Phase 6 of 13**: real equatorial↔horizontal astronomy math is in
+place, with equatorial/horizontal coordinate grids, a horizon ring with
+N/S/E/W markers, and worker-computed horizon culling that hides
+below-the-horizon stars — all exercised via a temporary dev toggle until
+the real "Today's Night Sky" UI arrives in Phase 7. Search, time travel,
+planets, and the rest of the phase plan are still ahead — see
 `ARCHITECTURE.md`'s phase log.
 
 ## Getting started

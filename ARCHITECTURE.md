@@ -40,39 +40,40 @@ architectural decision behind the whole scene:
 
 ```
 astra/
-├─ public/data/       generated catalogs (stars, constellations, DSOs) — Phase 3+
-├─ scripts/           build-time data pipeline (raw catalogs → public/data) — Phase 3+
+├─ public/data/       generated catalogs: stars (Phase 3), constellations (Phase 5)
+├─ scripts/           build-time data pipeline (raw catalogs → public/data)
 ├─ src/
 │  ├─ app/            App shell, error boundary, app-level constants
 │  ├─ scene/
 │  │  ├─ Canvas/       the R3F <Canvas> + camera setup
-│  │  ├─ camera/       CameraController (pan/zoom/inertia) — Phase 2
-│  │  ├─ layers/       StarsLayer, ConstellationLayer, GridLayer, ... (one per layer)
+│  │  ├─ camera/       CameraController (pan/zoom/inertia)
+│  │  ├─ layers/       StarsLayer, ConstellationLayer, GridLayer, HorizonLayer, LabelsLayer
 │  │  ├─ shaders/      GLSL for stars/glow
-│  │  └─ picking/      raycasting / selection — Phase 4
+│  │  └─ picking/      raycasting helpers (FOV-scaled thresholds)
 │  ├─ ui/
 │  │  ├─ primitives/   design-system building blocks (GlassPanel, ...)
-│  │  ├─ panels/       InfoPanel + per-object-type variants — Phase 4
+│  │  ├─ panels/       InfoPanel + per-object-type variants (Star, Constellation, ...)
 │  │  ├─ controls/     toggle dock, time slider, location picker — Phase 7/8/12
 │  │  └─ search/       unified search — Phase 11
 │  ├─ state/           Zustand stores (see below)
-│  ├─ astronomy/       wrappers over astronomy-engine — Phase 6
-│  ├─ data/            typed catalog loaders + IndexedDB cache — Phase 3+
+│  ├─ astronomy/       coordinate transforms, sidereal time, formatting — real math, no UI
+│  ├─ data/            typed catalog loaders + IndexedDB cache (stars only — see Phase 5 log)
 │  ├─ hooks/           shared React hooks
-│  ├─ lib/             generic utilities (math, easing, ...)
-│  ├─ workers/         web workers for heavy transforms/search indexing
-│  ├─ content/         authored educational copy — Phase 4+
+│  ├─ lib/             generic utilities (math, easing, motion)
+│  ├─ workers/         web workers for heavy transforms (horizon culling; search indexing later)
+│  ├─ content/         authored educational copy (stars, constellations)
 │  ├─ styles/          tokens.css (design tokens) + globals.css
-│  └─ types/           shared domain types (CelestialObject union, etc.)
+│  └─ types/           shared domain types (Star, Constellation, coordinates, ...)
 ├─ tests/              Playwright e2e — Phase 13
 ├─ ARCHITECTURE.md
 ├─ ATTRIBUTIONS.md
 └─ README.md
 ```
 
-Folders with only a `.gitkeep` right now are placeholders for later
-phases — the tree above is the target shape, established up front so the
-architecture is visible from the start, per the project's build plan.
+Folders still holding only a `.gitkeep` (`ui/controls`, `ui/search`,
+`tests`) are placeholders for phases that haven't landed yet — the tree
+above is the target shape, established up front in Phase 1 so the
+architecture was visible from the start.
 
 ## State management
 
@@ -113,10 +114,11 @@ prose docs.
 | Testing      | Vitest (+ Testing Library, Playwright later)               | Fast, Vite-native                                                                                                          |
 | Tooling      | ESLint (flat config) + Prettier + strict TypeScript        | Explicit project choice — see "Tooling notes" below                                                                        |
 
-Not yet installed (added when their phase needs them, per the "touch
-only what the phase needs" rule): `@react-three/drei`, `framer-motion`,
-`react-router-dom`, `astronomy-engine`, `@testing-library/react`,
-`playwright`, `vite-react-ssg`.
+Added since, each when its phase first needed it (per the "touch only
+what the phase needs" rule): `framer-motion` (Phase 4), `@react-three/
+drei` (Phase 5), `astronomy-engine` (Phase 6). Still not yet installed:
+`react-router-dom`, `@testing-library/react`, `playwright`,
+`vite-react-ssg`.
 
 **Cost constraint:** every dependency and planned deploy target must be
 free/open-source with no paid tier required. All datasets planned in the
@@ -337,3 +339,48 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
 - `CELESTIAL_SPHERE_RADIUS` moved to `src/scene/constants.ts` now that
   two layers (stars, constellations) need to agree on it — the point
   where a previously-fine local constant becomes worth sharing.
+
+### Phase 6 — Astronomy core: time/location state, EQ↔HOR transforms, grids, cardinals
+
+- **`astronomy-engine`** finally installed (deferred since Phase 1's
+  stack list). `src/astronomy/horizontal.ts`:
+  - `equatorialToHorizontal` wraps its `Horizon()` function directly.
+    The one real gotcha: `Horizon()` wants RA in **sidereal hours**, not
+    degrees — converted right at the call site, specifically to avoid
+    the hours/degrees bug class this project has been deliberately
+    designing around since Phase 3. Precession/nutation are handled
+    internally by `Horizon()`, so "far dates" aren't a separate concern.
+  - `horizontalToEquatorial` (the inverse) has no direct library
+    function, so it's a hand-implemented standard spherical-astronomy
+    formula, using `SiderealTime()` (Greenwich) + observer longitude for
+    local sidereal time. Validated with round-trip tests across 6 stars
+    _and_ two special cases independently checkable from first
+    principles (a star at Dec = observer latitude with hour angle 0 sits
+    at the zenith; a celestial-equator star rises due east for a
+    mid-latitude observer) — round-trip consistency alone can't catch a
+    self-consistent-but-wrong sign convention, these can.
+- **Horizon culling**: `src/workers/horizonCulling.worker.ts` computes
+  every star's altitude for the current observer/time in one batched
+  message (not one round trip per star — the whole reason this needs a
+  worker at 40,000+ stars). `useHorizonCulling` owns the worker's
+  lifecycle (created once, reused across recomputes) and derives its
+  return value from `enabled`/`observer` rather than resetting state
+  inside the effect body — sidesteps `eslint-plugin-react-hooks`'
+  `set-state-in-effect` rule entirely instead of suppressing it.
+  `useVisibleStarCatalog` then filters the catalog's buffers _and_
+  domain objects together, renumbering indices so hover-picking (which
+  reports indices relative to what's actually drawn) stays correct.
+  `StarsLayer` itself needed zero changes — it just renders whatever
+  catalog it's handed, filtered or not.
+- **`GridLayer`** (equatorial + horizontal grids) and **`HorizonLayer`**
+  (horizon ring + N/S/E/W labels) reuse the exact same
+  `equatorialToCartesian` pipeline as stars/constellations. The
+  equatorial grid is fixed relative to the stars (computed once); the
+  horizontal grid/ring/cardinals depend on observer + time, recomputed
+  via `useMemo` when those change — not per-frame, since nothing animates
+  time continuously yet (that's Phase 8).
+- **Temporary dev control**: `src/app/DevObserverToggle.tsx`, explicitly
+  flagged `TODO(Phase 7)` for removal once the real "Today's Night Sky"
+  geolocation/manual-entry UI exists. This is what the phase's own
+  acceptance criteria asks for — a way to exercise observer mode before
+  the real trigger UI is built.
