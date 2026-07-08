@@ -4,9 +4,11 @@ import { horizontalToEquatorial } from '@/astronomy/horizontal'
 import { useConstellations } from '@/hooks/useConstellations'
 import { useDeepSkyObjects } from '@/hooks/useDeepSkyObjects'
 import { useHorizonCulling } from '@/hooks/useHorizonCulling'
+import { useMoonPosition } from '@/hooks/useMoonPosition'
 import { usePlanetPositions } from '@/hooks/usePlanetPositions'
 import { useSearchIndex } from '@/hooks/useSearchIndex'
 import { useStarCatalog } from '@/hooks/useStarCatalog'
+import { useSunPosition } from '@/hooks/useSunPosition'
 import { useVisibleConstellations } from '@/hooks/useVisibleConstellations'
 import { SceneCanvas } from '@/scene/Canvas/SceneCanvas'
 import { useLocationStore } from '@/state/useLocationStore'
@@ -21,8 +23,10 @@ import { TimeSlider } from '@/ui/controls/TimeSlider'
 import { TodayButton } from '@/ui/controls/TodayButton'
 import { ConstellationPanel } from '@/ui/panels/ConstellationPanel'
 import { DeepSkyObjectPanel } from '@/ui/panels/DeepSkyObjectPanel'
+import { MoonPanel } from '@/ui/panels/MoonPanel'
 import { PlanetPanel } from '@/ui/panels/PlanetPanel'
 import { StarPanel } from '@/ui/panels/StarPanel'
+import { SunPanel } from '@/ui/panels/SunPanel'
 import { GlassPanel } from '@/ui/primitives/GlassPanel'
 import { SearchBar } from '@/ui/search/SearchBar'
 import { APP_NAME } from './constants'
@@ -78,6 +82,8 @@ export function App() {
   )
   const visibleConstellations = useVisibleConstellations(constellations, observer, currentDate)
   const planets = usePlanetPositions(currentDate)
+  const sun = useSunPosition(currentDate)
+  const moon = useMoonPosition(currentDate, observer)
   const searchIndex = useSearchIndex(starCatalog.stars, constellations, deepSkyObjects)
 
   const selectedStar =
@@ -90,6 +96,8 @@ export function App() {
     selection?.type === 'planet' ? planets.find((p) => p.id === selection.id) : undefined
   const selectedDso =
     selection?.type === 'dso' ? deepSkyObjects.find((d) => d.id === selection.id) : undefined
+  const isSunSelected = selection?.type === 'sun'
+  const isMoonSelected = selection?.type === 'moon'
 
   const brightestStarsInSelectedConstellation = selectedConstellation
     ? starCatalog.stars
@@ -112,7 +120,11 @@ export function App() {
           ? constellations.find((c) => c.id === result.id)?.labelPosition
           : result.type === 'planet'
             ? planets.find((planet) => planet.id === result.id)?.equatorial
-            : deepSkyObjects.find((dso) => dso.id === result.id)?.equatorial
+            : result.type === 'dso'
+              ? deepSkyObjects.find((dso) => dso.id === result.id)?.equatorial
+              : result.type === 'sun'
+                ? sun.equatorial
+                : moon.equatorial
 
     if (target) useSceneStore.getState().setFlyToTarget(target)
   }
@@ -124,6 +136,8 @@ export function App() {
           starCatalog={starCatalog}
           constellations={visibleConstellations}
           deepSkyObjects={deepSkyObjects}
+          sun={sun}
+          moon={moon}
           observer={observer}
           date={currentDate}
           horizonCullingEnabled={horizonCullingEnabled}
@@ -177,6 +191,8 @@ export function App() {
               onClose={clearSelection}
             />
           )}
+          {isSunSelected && <SunPanel key="sun" sun={sun} onClose={clearSelection} />}
+          {isMoonSelected && <MoonPanel key="moon" moon={moon} onClose={clearSelection} />}
           {showLocationPicker && (
             <LocationPicker
               key="location-picker"

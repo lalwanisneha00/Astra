@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type SelectableObjectType = 'star' | 'constellation' | 'planet' | 'dso'
+export type SelectableObjectType = 'star' | 'constellation' | 'planet' | 'dso' | 'sun' | 'moon'
 
 export interface ObjectSelection {
   type: SelectableObjectType

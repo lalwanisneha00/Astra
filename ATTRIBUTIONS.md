@@ -91,16 +91,18 @@ shipped in `public/data/`.
   atlas missing one of the sky's most recognizable objects (id
   `Mel022` in `dso.json`).
 
-### Planet physical facts (Phase 9)
+### Planet, Sun, and Moon physical facts (Phase 9; Sun/Moon added in the polish pass)
 
-Unlike every dataset above, `src/content/planets.ts` isn't built from a
-processed, redistributed source file — the physical facts for the seven
-planets (diameter, mass, gravity, moon count, orbital/rotation period,
-mean distance) are hand-authored, cross-checked against widely-published
-figures (e.g. NASA's Planetary Fact Sheets, nssdc.gsfc.nasa.gov), the
-same way the hand-written star/constellation prose content is. Planet,
-Sun, and Moon _positions_ are computed at runtime by `astronomy-engine`
-(MIT license) — not a static dataset either.
+Unlike every dataset above, `src/content/planets.ts` and
+`src/content/sunMoon.ts` aren't built from a processed, redistributed
+source file — the physical facts (diameter, mass, gravity, moon count,
+orbital/rotation period, mean distance, surface temperature) are
+hand-authored, cross-checked against widely-published figures (e.g.
+NASA's Planetary Fact Sheets, nssdc.gsfc.nasa.gov), the same way the
+hand-written star/constellation prose content is. Planet, Sun, and Moon
+_positions_ — including the Moon's real topocentric parallax correction
+when an observer is set — are computed at runtime by `astronomy-engine`
+(MIT license), not a static dataset either.
 
 Planned sources, to be added (with license details confirmed at
 integration time) as their phase lands:

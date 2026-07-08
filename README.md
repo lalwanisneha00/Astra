@@ -12,16 +12,14 @@ data credits (populated as real catalogs are integrated, starting Phase 3).
 
 ## Status
 
-**Phase 12 of 13**: a "Layers" dock (bottom-left) toggles every visual
-layer on or off — constellation lines/names, star names, planets,
-deep-sky objects, equatorial/horizon grids, object labels, and
-constellation mythology. A unified search bar (top-center, Phase 11)
-finds stars, constellations, planets, and deep-sky objects by name —
-picking a result flies the camera there and opens its facts panel.
-~510 real galaxies, star clusters, and nebulae and Mercury through
-Neptune all render at their real positions (Phases 9-10), each
-clickable for a facts panel. The rest of the phase plan is still ahead —
-see `ARCHITECTURE.md`'s phase log.
+All 12 original phases are complete (stars, constellations, camera,
+selection, time travel, planets, deep-sky objects, search, the layer
+toggle dock) and the app is now in an ongoing **polish pass** — accuracy,
+visual quality, navigation, and usability improvements batched and
+verified the same way each phase was. See `ARCHITECTURE.md`'s "Polish
+pass" log for what's landed so far, including the Sun and Moon (real
+positions — the Moon's with true topocentric parallax — and a
+phase-accurate lunar disc).
 
 ## Getting started
 

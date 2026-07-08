@@ -54,6 +54,11 @@ export function useSearchIndex(
       })
     }
 
+    results.push(
+      { type: 'sun', id: 'sun', label: 'Sun', subtitle: 'Star', rank: -10, keywords: 'sun' },
+      { type: 'moon', id: 'moon', label: 'Moon', subtitle: 'Moon', rank: -9, keywords: 'moon' },
+    )
+
     for (const id of PLANET_IDS) {
       results.push({
         type: 'planet',

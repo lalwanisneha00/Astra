@@ -795,3 +795,55 @@ exception — see Batch B below).
   UTC instant internally) and `astronomy-engine` (UTC/TT internally) —
   DST is a local-clock-display concept that never enters the actual
   calculation, so there's nothing for such a test to catch.
+
+### Batch B — Sun and Moon
+
+- **`src/astronomy/sunMoon.ts`**: the Sun uses the same geocentric J2000
+  `GeoVector`/`EquatorFromVector` treatment as `computePlanetPositions`
+  (its own parallax, ~8.8″, is imperceptible at this rendering scale).
+  The Moon is different: its parallax is up to ~1°, large enough to
+  matter, so `computeMoonPosition` uses `Astronomy.Equator(..., ofdate:
+false, ...)` with a real `Observer` whenever one exists — that call
+  still applies the full topocentric shift (it subtracts the observer's
+  own geocentric position vector internally), just expressed in the same
+  J2000 frame everything else already uses — falling back to the
+  geocentric position in explore mode, where there's no real observer to
+  correct for. A new test confirms the geocentric/topocentric positions
+  measurably differ (proving the parallax correction is actually doing
+  something) while illumination/phase stay identical either way (pure
+  Earth-Sun-Moon geometry, not parallax-dependent).
+- **The Moon is the one object in this app whose own appearance changes
+  night to night.** Every other sprite texture is generated once and
+  cached per category (`getPlanetTexture(style)`, `getDsoTexture(icon)`);
+  `createMoonPhaseTexture(illumination, waxing)` is deliberately _not_
+  cached, since the phase genuinely changes with date. Regenerating a
+  128×128 canvas (a few 2D fill calls) is cheap enough to do on every
+  recompute for a single object — nowhere near the scale that ever
+  required a worker or GPU-side approach elsewhere in this app.
+  Illumination is rounded to 2% steps before it's used as a `useMemo`
+  dependency, so trivial float differences between adjacent throttled
+  date ticks don't force a redraw for a visually-identical disc.
+- **Phase rendering uses the standard "half-plane plus ellipse"
+  technique**: fill the lit half (right when waxing, left when waning),
+  then either carve it down with a dark ellipse (crescent) or extend it
+  with a light ellipse (gibbous) — so the terminator is always a true
+  ellipse arc. The waxing-is-right-lit convention is the common
+  simplification (a real position-angle-correct terminator needs the
+  Moon's parallactic angle relative to the observer's zenith, which
+  flips for southern-hemisphere observers) — labeled as such in the
+  code, the same honest-approximation pattern `constellationFacts.ts`'s
+  viewing-month estimate already uses.
+- The Sun renders with no shading gradient at all (unlike a planet's
+  off-center-highlight disc) — it's self-luminous, so there's no
+  terminator to show; just a bright, symmetric radiant disc plus a much
+  stronger version of the existing glow-sprite technique.
+- `'sun' | 'moon'` added to `SelectableObjectType`; both have fixed ids
+  (`'sun'`/`'moon'`, only one of each ever exists) rather than the
+  array-of-many pattern planets/DSOs use. Added to `useSearchIndex` with
+  a fixed low `rank` (more prominent than anything else in the sky) and
+  no baked-in coordinates, same reasoning as planets — resolved live at
+  pick time.
+- Both respect horizon culling in observer mode exactly like every other
+  object type (a plain `equatorialToHorizontal` check in `SceneCanvas`,
+  the same cost class as the per-object checks `PlanetsLayer`/
+  `DeepSkyLayer` already do).
