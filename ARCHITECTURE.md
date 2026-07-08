@@ -53,7 +53,7 @@ astra/
 │  ├─ ui/
 │  │  ├─ primitives/   design-system building blocks (GlassPanel, ...)
 │  │  ├─ panels/       InfoPanel + per-object-type variants (Star, Constellation, ...)
-│  │  ├─ controls/     TodayButton, LocationPicker; toggle dock/time slider — Phase 8/12
+│  │  ├─ controls/     TodayButton, LocationPicker, TimeSlider; toggle dock — Phase 12
 │  │  └─ search/       unified search — Phase 11
 │  ├─ state/           Zustand stores (see below)
 │  ├─ astronomy/       coordinate transforms, sidereal time, formatting — real math, no UI
@@ -452,3 +452,42 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
      the star catalog's, since sharing one database name across
      independent loader modules would require them to coordinate a
      single schema-version/upgrade path.
+
+### Phase 8 — Time Travel
+
+- **Most of the mechanism already existed.** Equatorial star/
+  constellation positions are fixed; what actually changes as time
+  passes is the _observer's_ relationship to them (horizon culling, the
+  horizontal grid/ring/cardinals) — all of which already reacted to
+  `useTimeStore.currentDate` since Phase 6/7. Phase 8 is mostly the UI
+  (`TimeSlider`) plus making rapid date changes not overwhelm what's
+  already downstream of `currentDate`.
+- **One throttle, one source**: both scrubbing and continuous playback
+  route through the _same_ `throttle(setCurrentDate, 120ms)` instance,
+  rather than throttling separately inside `useHorizonCulling` or
+  `GridLayer`. Protecting every consumer at the one place `currentDate`
+  actually changes is simpler than duplicating throttling logic at each
+  place that reacts to it — and it means playback (which would otherwise
+  call `setCurrentDate` every animation frame, ~60/sec) is covered by the
+  exact same mechanism as slider dragging, for free.
+- **`src/lib/throttle.ts`** is leading+trailing: fires immediately, then
+  guarantees the _last_ pending call still lands once the window ends —
+  the scrubbed-to date can never be silently dropped, which a simpler
+  "sample every N ms" throttle could do.
+- **`src/astronomy/dateArithmetic.ts`** works in UTC throughout
+  (`setUTCHours`/`setUTCMonth`/etc.), sidestepping local-timezone/DST
+  ambiguity entirely — UTC never observes DST, so "add 24 hours" and
+  "add 1 day" are always identical, exactly the equivalence the tests
+  check. Month/year arithmetic relies on native `Date` rollover for
+  out-of-range days (e.g. Jan 31 + 1 month lands in early March); that's
+  documented, expected behavior, not patched around.
+- **Segmented slider scale**, per the spec's own suggested fix for
+  "precision over huge ranges": four independent granularities (Hour
+  ±24, Day ±30, Month ±12, Year ±50), each its own bounded range, rather
+  than one linear scale trying to span both hours and centuries.
+  Switching granularity re-anchors the offset to the current date so it
+  never jumps to a stale value reinterpreted in new units.
+- Continuous playback approximates month/year as fixed durations (30.44
+  / 365.25 days) purely for smooth animation speed — discrete jumps
+  (dragging, or a future "+1 month" step button) always use
+  `addGranularity`'s exact calendar arithmetic instead.

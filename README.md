@@ -12,12 +12,11 @@ data credits (populated as real catalogs are integrated, starting Phase 3).
 
 ## Status
 
-**Phase 7 of 13**: click "Today's Night Sky" for your real, current sky
-— it requests your location and shows only what's above your horizon
-right now, correctly oriented; if location access is denied or
-unavailable, a city search / manual coordinates picker opens instead.
-Search, time travel, planets, and the rest of the phase plan are still
-ahead — see
+**Phase 8 of 13**: scrub time with the slider at the bottom — hours,
+days, months, or years — and watch the horizon-relative sky update
+(what's risen/set changes as you move through time); play/pause for
+continuous animation, or jump back to "Now." Search, planets, and the
+rest of the phase plan are still ahead — see
 `ARCHITECTURE.md`'s phase log.
 
 ## Getting started
