@@ -751,3 +751,47 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   dedicated toggle.
 - Every flag in `LayerVisibility` now has a real, visible effect and
   appears in the dock — nothing left inert.
+
+## Polish pass
+
+With all 12 phases shipped, the app was declared feature-complete. This
+section logs a sustained accuracy/visual-quality/navigation/usability
+pass across the existing implementation — batched and verified exactly
+like the numbered phases above, but not adding new object types or
+layers except where explicitly called out (Sun/Moon is the one approved
+exception — see Batch B below).
+
+### Batch A — Astronomical accuracy audit
+
+- Full read-through of every coordinate transform
+  (`astronomy/coordinates.ts`, `astronomy/horizontal.ts`,
+  `astronomy/planets.ts`), every RA/Dec ↔ Alt/Az call site, and the
+  camera's own yaw/pitch orientation math (`scene/camera/orientation.ts`)
+  found **no correctness bugs** — the round-trip and special-case tests
+  already in place since Phase 6/7 hold up, and this pass added more:
+  a mirrored south-pole case for `equatorialToCartesian` (only the north
+  pole had a test), a near-polar-observer round trip (the
+  `horizontalToEquatorial` hour-angle formula divides by `cos(lat)`,
+  the one place a latitude close to ±90° is mathematically the risky
+  case), and an explicit RA-0/360-seam round trip.
+- `coordinates.ts`'s long-standing "not yet externally validated"
+  comment about east/west handedness was stale — Phase 6/7's observer
+  mode has matched real sky orientation in practice ever since it
+  shipped. Updated to say so instead of carrying open-ended doubt
+  forward indefinitely.
+- **Real gap found, deliberately deferred to Batch C, not fixed here**:
+  `equatorialToHorizontal`'s call to `Astronomy.Horizon()` never passes
+  the `refraction` argument, so atmospheric refraction (~34′ of lift
+  right at the horizon) isn't applied anywhere. Fixing this by shifting
+  rendered object _positions_ would be invasive — every layer places
+  objects at their true, unrefracted equatorial position by design (see
+  "Rendering model" above), and refraction only ever matters in a thin
+  band within a degree or two of the horizon. Batch C's horizon fade
+  band is the right, contained place to apply a refraction-adjusted
+  _visibility_ threshold instead of touching every layer's placement
+  math for a sub-degree effect.
+- **Considered and correctly ruled out**: a "DST-adjacent date" test.
+  Every date/time value in this app flows through JS `Date` (always a
+  UTC instant internally) and `astronomy-engine` (UTC/TT internally) —
+  DST is a local-clock-display concept that never enters the actual
+  calculation, so there's nothing for such a test to catch.

@@ -20,6 +20,17 @@ describe('equatorialToCartesian', () => {
     expect(z2).toBeCloseTo(0)
   })
 
+  it('places Dec=-90 at the -Y pole regardless of RA (mirrors the +Y case)', () => {
+    const [x1, y1, z1] = equatorialToCartesian({ ra: 0, dec: -90 })
+    const [x2, y2, z2] = equatorialToCartesian({ ra: 200, dec: -90 })
+    expect(y1).toBeCloseTo(-1)
+    expect(x1).toBeCloseTo(0)
+    expect(z1).toBeCloseTo(0)
+    expect(y2).toBeCloseTo(-1)
+    expect(x2).toBeCloseTo(0)
+    expect(z2).toBeCloseTo(0)
+  })
+
   it('always returns a unit vector', () => {
     const cases: Array<[number, number]> = [
       [0, 0],

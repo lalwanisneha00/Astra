@@ -81,3 +81,46 @@ describe('horizontalToEquatorial', () => {
     expect(equatorial.ra).toBeLessThan(360)
   })
 })
+
+describe('extreme-latitude round trip', () => {
+  // horizontalToEquatorial's hour-angle formula divides by cos(lat) —
+  // the mathematically risky case is a near-polar observer, where
+  // cos(lat) approaches zero. Both poles exercise that division.
+  const NEAR_NORTH_POLE = { latitude: 89.9, longitude: 12 }
+  const NEAR_SOUTH_POLE = { latitude: -89.9, longitude: -47 }
+
+  for (const observer of [NEAR_NORTH_POLE, NEAR_SOUTH_POLE]) {
+    it(`round-trips correctly for an observer at latitude ${observer.latitude}`, () => {
+      const cases: Array<{ ra: number; dec: number }> = [
+        { ra: 45, dec: 10 },
+        { ra: 200, dec: -40 },
+      ]
+      for (const { ra, dec } of cases) {
+        const horizontal = equatorialToHorizontal({ ra, dec }, observer, REFERENCE_DATE)
+        expect(Number.isFinite(horizontal.altitude)).toBe(true)
+        expect(Number.isFinite(horizontal.azimuth)).toBe(true)
+
+        const back = horizontalToEquatorial(horizontal, observer, REFERENCE_DATE)
+        expect(back.dec).toBeCloseTo(dec, 2)
+        const raDiff = ((back.ra - ra + 540) % 360) - 180
+        expect(raDiff).toBeCloseTo(0, 1)
+      }
+    })
+  }
+})
+
+describe('RA wraparound round trip', () => {
+  it('round-trips correctly for RA values straddling the 0/360 seam', () => {
+    const cases: Array<{ ra: number; dec: number }> = [
+      { ra: 0.05, dec: 20 },
+      { ra: 359.95, dec: 20 },
+    ]
+    for (const { ra, dec } of cases) {
+      const horizontal = equatorialToHorizontal({ ra, dec }, NYC, REFERENCE_DATE)
+      const back = horizontalToEquatorial(horizontal, NYC, REFERENCE_DATE)
+      expect(back.dec).toBeCloseTo(dec, 3)
+      const raDiff = ((back.ra - ra + 540) % 360) - 180
+      expect(raDiff).toBeCloseTo(0, 2)
+    }
+  })
+})
