@@ -22,6 +22,12 @@ export interface StarRenderBuffers {
   /** Each star's own index, 0..count-1 — lets the shader identify the
    * hovered point via a uHoveredIndex uniform (see StarsLayer). */
   indices: Float32Array
+  /** Apparent magnitude — drives Explore Mode's progressive reveal (see
+   * scene/exploration.ts): the shader compares this against a per-frame
+   * cutoff derived from camera FOV, rather than this app re-filtering
+   * the buffers on zoom (the exact CPU-rebuild pattern the Phase 8 fix
+   * eliminated for horizon culling). */
+  magnitudes: Float32Array
   count: number
 }
 
@@ -38,6 +44,7 @@ const EMPTY_BUFFERS: StarRenderBuffers = {
   colors: new Float32Array(0),
   phases: new Float32Array(0),
   indices: new Float32Array(0),
+  magnitudes: new Float32Array(0),
   count: 0,
 }
 
@@ -83,6 +90,7 @@ function tierToCatalog(tier: StarTierData): StarCatalog {
   const colors = new Float32Array(count * 3)
   const phases = new Float32Array(count)
   const indices = new Float32Array(count)
+  const magnitudes = new Float32Array(count)
   const stars: Star[] = new Array(count)
 
   for (let i = 0; i < count; i++) {
@@ -92,6 +100,7 @@ function tierToCatalog(tier: StarTierData): StarCatalog {
     positions[i * 3 + 2] = z * CELESTIAL_SPHERE_RADIUS
 
     sizes[i] = magnitudeToPointSize(tier.mag[i] ?? BRIGHTEST_REFERENCE_MAG)
+    magnitudes[i] = tier.mag[i] ?? BRIGHTEST_REFERENCE_MAG
 
     const [r, g, b] = hexToRgb01(tier.colorHex[i] ?? '#ffffff')
     colors[i * 3] = r
@@ -104,7 +113,7 @@ function tierToCatalog(tier: StarTierData): StarCatalog {
     stars[i] = tierRowToStar(tier, i)
   }
 
-  return { buffers: { positions, sizes, colors, phases, indices, count }, stars }
+  return { buffers: { positions, sizes, colors, phases, indices, magnitudes, count }, stars }
 }
 
 function mergeCatalogs(a: StarCatalog, b: StarCatalog): StarCatalog {
@@ -114,6 +123,7 @@ function mergeCatalogs(a: StarCatalog, b: StarCatalog): StarCatalog {
   const colors = new Float32Array(count * 3)
   const phases = new Float32Array(count)
   const indices = new Float32Array(count)
+  const magnitudes = new Float32Array(count)
 
   positions.set(a.buffers.positions, 0)
   positions.set(b.buffers.positions, a.buffers.count * 3)
@@ -123,12 +133,14 @@ function mergeCatalogs(a: StarCatalog, b: StarCatalog): StarCatalog {
   colors.set(b.buffers.colors, a.buffers.count * 3)
   phases.set(a.buffers.phases, 0)
   phases.set(b.buffers.phases, a.buffers.count)
+  magnitudes.set(a.buffers.magnitudes, 0)
+  magnitudes.set(b.buffers.magnitudes, a.buffers.count)
   // Indices renumber across the merge so they stay 0..count-1 overall,
   // matching the concatenated stars array below.
   for (let i = 0; i < count; i++) indices[i] = i
 
   return {
-    buffers: { positions, sizes, colors, phases, indices, count },
+    buffers: { positions, sizes, colors, phases, indices, magnitudes, count },
     stars: [...a.stars, ...b.stars],
   }
 }

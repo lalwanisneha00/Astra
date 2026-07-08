@@ -17,6 +17,10 @@ interface DeepSkyLayerProps {
  * GPU-side discard StarsLayer's 40,000+ stars required. */
 export function DeepSkyLayer({ objects, observer, date }: DeepSkyLayerProps) {
   const showDeepSky = useLayersStore((state) => state.deepSky)
+  // Explore Mode's progressive reveal only applies with no real
+  // observer — Today's Night Sky keeps showing every loaded object
+  // regardless of zoom, per the spec's "separate from Today's Night Sky."
+  const explorationEnabled = observer === null
 
   const visibleObjects = useMemo(() => {
     if (!observer) return objects
@@ -30,7 +34,7 @@ export function DeepSkyLayer({ objects, observer, date }: DeepSkyLayerProps) {
   return (
     <>
       {visibleObjects.map((dso) => (
-        <DsoMarker key={dso.id} dso={dso} />
+        <DsoMarker key={dso.id} dso={dso} explorationEnabled={explorationEnabled} />
       ))}
     </>
   )

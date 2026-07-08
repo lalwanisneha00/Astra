@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { StarCatalog } from '@/hooks/useStarCatalog'
 import { prefersReducedMotion } from '@/lib/motion'
+import { MAGNITUDE_FADE_WIDTH, starMagnitudeCutoff } from '@/scene/exploration'
 import { wasDrag } from '@/scene/picking/dragGuard'
 import { fovScaledPointThreshold } from '@/scene/picking/pointThreshold'
 import fragmentShader from '@/scene/shaders/starField.frag.glsl?raw'
@@ -29,18 +30,28 @@ interface StarsLayerProps {
    * every horizon recompute was the actual cause of the time-scrubbing
    * hang this replaced (see ARCHITECTURE.md's Phase 8 fix note). */
   altitudes: Float32Array | null
+  /** Whether Explore Mode's Earth-to-Universe progressive reveal
+   * applies at all (always false in observer mode — Today's Night Sky
+   * keeps showing every loaded star regardless of zoom, per the
+   * spec's explicit "separate from Today's Night Sky"). */
+  explorationEnabled: boolean
 }
 
 /** Catalog is loaded once in App.tsx and passed down, so the same loaded
  * data can also be looked up by StarPanel outside the canvas — see
  * ARCHITECTURE.md's "Star selection" note. */
-export function StarsLayer({ catalog, horizonCullingEnabled, altitudes }: StarsLayerProps) {
+export function StarsLayer({
+  catalog,
+  horizonCullingEnabled,
+  altitudes,
+  explorationEnabled,
+}: StarsLayerProps) {
   const materialRef = useRef<THREE.ShaderMaterial>(null)
   const altitudeAttributeRef = useRef<THREE.BufferAttribute>(null)
   const dpr = useThree((state) => state.viewport.dpr)
   const reducedMotion = useMemo(() => prefersReducedMotion(), [])
   const { buffers, stars } = catalog
-  const { positions, sizes, phases, colors, indices, count } = buffers
+  const { positions, sizes, phases, colors, indices, magnitudes, count } = buffers
 
   const hoveredIndexRef = useRef(-1)
   const starsRef = useRef<Star[]>(stars)
@@ -52,6 +63,11 @@ export function StarsLayer({ catalog, horizonCullingEnabled, altitudes }: StarsL
   useEffect(() => {
     altitudesRef.current = altitudes
   }, [altitudes])
+
+  // Updated every frame in useFrame below — read imperatively by
+  // isRevealed rather than as a React dependency, matching this file's
+  // existing altitude-culling pattern.
+  const magnitudeCutoffRef = useRef(Infinity)
 
   // Stable across altitude recomputes — only a new array when the star
   // count itself changes (tiers loading), not on every horizon update.
@@ -77,6 +93,8 @@ export function StarsLayer({ catalog, horizonCullingEnabled, altitudes }: StarsL
       uTwinkleAmount: { value: reducedMotion ? 0 : 1 },
       uHoveredIndex: { value: -1 },
       uHorizonCullingEnabled: { value: 0 },
+      uExplorationEnabled: { value: 0 },
+      uMagnitudeCutoff: { value: Infinity },
     }),
     [dpr, reducedMotion],
   )
@@ -85,10 +103,17 @@ export function StarsLayer({ catalog, horizonCullingEnabled, altitudes }: StarsL
     const uniforms = materialRef.current?.uniforms
     const timeUniform = uniforms?.uTime
     const cullingUniform = uniforms?.uHorizonCullingEnabled
+    const explorationUniform = uniforms?.uExplorationEnabled
+    const cutoffUniform = uniforms?.uMagnitudeCutoff
     if (timeUniform) timeUniform.value += delta
     if (cullingUniform) cullingUniform.value = horizonCullingEnabled ? 1 : 0
 
     const camera = state.camera as THREE.PerspectiveCamera
+    const cutoff = explorationEnabled ? starMagnitudeCutoff(camera.fov) : Infinity
+    magnitudeCutoffRef.current = cutoff
+    if (explorationUniform) explorationUniform.value = explorationEnabled ? 1 : 0
+    if (cutoffUniform) cutoffUniform.value = cutoff
+
     state.raycaster.params.Points.threshold = fovScaledPointThreshold(
       camera.fov,
       BASE_POINT_THRESHOLD,
@@ -98,11 +123,23 @@ export function StarsLayer({ catalog, horizonCullingEnabled, altitudes }: StarsL
 
   const isCulled = useCallback(
     (index: number) => {
-      if (!horizonCullingEnabled) return false
-      const altitude = altitudesRef.current?.[index]
-      return altitude !== undefined && altitude < 0
+      if (horizonCullingEnabled) {
+        const altitude = altitudesRef.current?.[index]
+        if (altitude !== undefined && altitude < 0) return true
+      }
+      // Mirrors the shader's own fully-invisible threshold (magnitude
+      // cutoff plus the fade band) — a star that's still fading in
+      // remains clickable, one that's fully hidden shouldn't be.
+      const magnitude = magnitudes[index]
+      if (
+        magnitude !== undefined &&
+        magnitude > magnitudeCutoffRef.current + MAGNITUDE_FADE_WIDTH
+      ) {
+        return true
+      }
+      return false
     },
-    [horizonCullingEnabled],
+    [horizonCullingEnabled, magnitudes],
   )
 
   const setHoveredIndex = useCallback((index: number) => {
@@ -155,6 +192,7 @@ export function StarsLayer({ catalog, horizonCullingEnabled, altitudes }: StarsL
         <bufferAttribute attach="attributes-aTwinklePhase" args={[phases, 1]} />
         <bufferAttribute attach="attributes-aColor" args={[colors, 3]} />
         <bufferAttribute attach="attributes-aIndex" args={[indices, 1]} />
+        <bufferAttribute attach="attributes-aMagnitude" args={[magnitudes, 1]} />
         <bufferAttribute
           ref={altitudeAttributeRef}
           attach="attributes-aAltitude"

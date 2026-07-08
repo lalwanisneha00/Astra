@@ -957,3 +957,59 @@ from that plan is folded into this one instead of being done twice.
   and bails out if the pointer moved more than 6px before release —
   small enough to still register a genuine stationary click/tap, large
   enough to absorb natural hand jitter.
+
+### Batch 3 — Earth-to-Universe progressive exploration
+
+- **`src/scene/exploration.ts`** (pure, tested) is the one place this
+  mapping lives. Explore Mode's zoom is deliberately _not_ optical
+  magnification — per the spec, zooming in represents traveling
+  progressively farther from Earth, revealing more of the universe
+  rather than just enlarging the current view. `getExplorationLevel(fov)`
+  maps camera FOV to a discrete depth level (1-6; level 1 is the
+  default/baseline naked-eye view, covering the whole default-to-widest
+  FOV range); `revealProgress(fov, level)` gives a 0-1 smoothstep fade
+  for any level so nothing pops in abruptly. Only active in **explore
+  mode** — Today's Night Sky (observer mode) is completely untouched by
+  any of this, per the spec's explicit "separate from Today's Night
+  Sky."
+- **Stars use a continuous magnitude cutoff, not the discrete level
+  ladder.** The catalog's existing tiers already double as a natural
+  depth ladder (tier0 mag≤4, tier1 mag≤6.5, tier2 mag≤8) — and since
+  there's real magnitude data to interpolate across, `starMagnitudeCutoff
+(fov)` computes a continuously-shifting faintest-visible-magnitude
+  directly, smoother than snapping through 3 discrete bands. This is
+  _why_ the default view felt overwhelmingly dense before this: at the
+  default FOV, all three tiers (~41,000 stars) were already loaded and
+  rendered unconditionally regardless of zoom — this cutoff is what
+  actually limits the baseline view to the brightest (~500, mag≤4)
+  stars now.
+- **Implemented as a GPU shader extension, not CPU filtering** — the
+  exact discipline the Phase 8 fix established for horizon culling.
+  `StarRenderBuffers` gained a `magnitudes` array (threaded through
+  `tierToCatalog`/`mergeCatalogs` in `useStarCatalog.ts`); the star
+  shader gained an `aMagnitude` attribute and `uMagnitudeCutoff`/
+  `uExplorationEnabled` uniforms, updated once per frame from camera FOV
+  exactly like the existing horizon-culling uniforms, and fades each
+  star out over a small magnitude band past the cutoff
+  (`MAGNITUDE_FADE_WIDTH`) rather than a hard cutoff. No CPU rebuild, no
+  geometry remount, no worker — same GPU-uniform pattern already proven
+  for horizon culling. `StarsLayer`'s `isCulled` mirrors the shader's own
+  fully-invisible threshold so a star that's still fading in stays
+  clickable, one that's fully hidden doesn't.
+- **Deep-sky objects use the discrete level ladder** via
+  `dsoRevealLevel(dso)`: a curated/Messier object bright enough to
+  plausibly spot with the naked eye is part of the Level-1 baseline
+  itself (the spec's "small number of major naked-eye deep-sky
+  objects") — clusters reveal at Level 2 ("additional star clusters"),
+  nebulae at Level 4 ("brighter nebulae"), galaxies at Level 5 ("major
+  galaxies"). `DsoMarker` eases its own material opacity toward
+  `revealProgress`'s target every frame (`damp`, matching this app's
+  established easing convention) — cheap at ~500 objects, no CPU
+  filtering or remount needed at this scale either. Its click/hover
+  handlers bail out below a small opacity threshold, the same
+  don't-interact-with-invisible-objects guard `StarsLayer` already
+  applies for horizon-culled stars.
+- Planets, Sun, and Moon stay always visible (they're the explicit
+  Level-1 baseline); constellation lines/names are unaffected (already
+  gated by their own toggle, already part of the Level-1 baseline per
+  the spec).
