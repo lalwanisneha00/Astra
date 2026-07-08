@@ -383,4 +383,18 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   flagged `TODO(Phase 7)` for removal once the real "Today's Night Sky"
   geolocation/manual-entry UI exists. This is what the phase's own
   acceptance criteria asks for — a way to exercise observer mode before
-  the real trigger UI is built.
+  the real trigger UI is built. It also flips on the `horizontalGrid`
+  layer flag when entering observer mode, since that flag defaults to
+  off (set in Phase 1, before this feature existed) and has no real
+  toggle UI until Phase 12.
+- **Fixed after initial testing**: horizon culling only hid individual
+  star points at first — `ConstellationLayer`/`LabelsLayer` never
+  received observer/date at all, so constellations entirely below the
+  horizon (e.g. Hydrus, Toucan, Indian, viewed from New York) kept
+  rendering their lines and name labels even with every star they
+  connect culled. `useVisibleConstellations` fixes this by checking
+  every constellation's line vertices, not just its label point —
+  showing it if _any_ vertex is above the horizon, since a 30°+-wide
+  figure can be genuinely half-risen (this doesn't clip the below-
+  horizon half of a partial figure, just decides whether to draw the
+  whole thing).
