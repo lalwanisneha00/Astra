@@ -566,3 +566,17 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   placeholders for exactly this phase. `PlanetPanel` follows
   `StarPanel`/`ConstellationPanel`'s exact recipe, rendering entirely
   through the shared `InfoPanel` shell.
+- **Fixed after initial testing**: the first version of `PlanetMarker`
+  used a true 3D `sphereGeometry` mesh, which read as "flat, oval balls"
+  rather than planets — a real (not imagined) artifact of perspective
+  projection: an off-axis sphere renders as a visible ellipse once the
+  camera's FOV gets wide, and this app's zoom range is 20-100° (see
+  `CameraController`'s `MIN_FOV`/`MAX_FOV`). Replaced with a drei
+  `<Billboard>` (always camera-facing) textured plane, using a single
+  shared, pre-shaded circular sprite (`scene/textures/planetTexture.ts`
+  — an off-center highlight plus limb darkening baked into a grayscale
+  canvas texture, tinted per planet via the material's `color`, which
+  multiplies the texture's RGB) rather than per-planet textures. This is
+  a deliberate scope boundary, not a placeholder: the Sun, Moon, and
+  deep-sky objects (nebulae/galaxies/clusters) are separate, later
+  phases in the original plan and were intentionally kept out of Phase 9.
