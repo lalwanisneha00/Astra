@@ -87,7 +87,7 @@ export function App() {
           observer={observer}
           date={currentDate}
         />
-        <header className="pointer-events-none absolute top-4 left-4 flex flex-col items-start gap-2">
+        <header className="pointer-events-none absolute top-4 left-4 z-10 flex flex-col items-start gap-2">
           <GlassPanel className="pointer-events-auto px-4 py-2">
             <h1 className="text-sm font-medium tracking-[0.2em] text-star-100 uppercase">
               {APP_NAME}

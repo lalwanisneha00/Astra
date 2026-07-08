@@ -31,7 +31,7 @@ interface SceneCanvasProps {
 export function SceneCanvas({ starCatalog, constellations, observer, date }: SceneCanvasProps) {
   return (
     <Canvas
-      className="absolute inset-0 touch-none"
+      className="absolute inset-0 z-0 touch-none"
       dpr={[1, 2]}
       gl={{ antialias: true }}
       camera={{ fov: INITIAL_FOV, near: NEAR_PLANE, far: FAR_PLANE, position: [0, 0, 0] }}

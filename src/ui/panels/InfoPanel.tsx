@@ -55,7 +55,7 @@ export function InfoPanel({
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: offset, opacity: 0 }}
       transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 320, damping: 32 }}
-      className="pointer-events-auto absolute top-4 right-4 bottom-4 w-[min(90vw,380px)]"
+      className="pointer-events-auto absolute top-4 right-4 bottom-4 z-10 w-[min(90vw,380px)]"
     >
       <GlassPanel
         ref={panelRef}

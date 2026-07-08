@@ -406,16 +406,11 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   the current time. Denied, unavailable, or timed-out geolocation opens
   **`LocationPicker`** instead of dead-ending, per the spec's explicit
   requirement — city search or manual lat/lon with range validation.
-- **`src/data/cities.ts`**: ~130 major world cities, hand-compiled
-  rather than pulled from an external dataset. A proper geocoding
-  database (checked: `dr5hn/countries-states-cities-database`) runs to
-  46MB uncompressed — wildly disproportionate for "let someone find
-  their city," especially with exact-coordinate entry sitting right next
-  to it as a fallback. City coordinates are well-established public
-  facts (unlike, say, a specific star's exact distance), so hand-
-  compiling was the proportionate call here, unlike the automated
-  pipelines for HYG/d3-celestial where the data genuinely couldn't be
-  reasonably authored by hand.
+- **City search data** (`scripts/build-cities.ts` → `public/data/cities.json`):
+  ~34,000 cities from GeoNames' `cities15000` export (every city with
+  population > 15,000, or a national capital regardless of size). See
+  "Fixed after initial testing" below for how this replaced a first
+  attempt at hand-compiling a smaller list.
 - **Elegant transition** (the spec's own phrase, and a named "common
   issue" if skipped): entering observer mode now eases the camera to
   look roughly south, partway up the sky, rather than leaving it
@@ -431,3 +426,29 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
 - **`useDismissablePanel`** extracted out of `InfoPanel` (focus-on-open,
   restore-on-close, Esc, outside-click) now that `LocationPicker` is a
   second, independent consumer of the exact same behavior.
+- **Fixed after initial testing (two issues)**:
+  1. Constellation name labels (drei `<Html>`, rendered inside the R3F
+     canvas tree) were visually bleeding through/over `LocationPicker`
+     and other DOM overlay panels — a real stacking-order bug, not the
+     intended "frosted glass shows blurred stars behind it" look.
+     Fixed with explicit `z-index` layering: the scene canvas at `z-0`,
+     the header/`TodayButton` at `z-10`, `InfoPanel`/`ConstellationPanel`/
+     `StarPanel` at `z-10`, and `LocationPicker` at `z-20` (it can appear
+     over an already-open info panel).
+  2. The original hand-compiled `src/data/cities.ts` (~130 cities) had
+     far too little coverage in practice — caught when testing showed it
+     recognized only 5 Indian cities, missing Pune, Hyderabad,
+     Ahmedabad, Jaipur, and thousands of others, despite India alone
+     having a population of 1.4 billion. Replaced with a proper data
+     pipeline (`scripts/build-cities.ts`) pulling GeoNames'
+     `cities15000` export — the same fetch-and-process pattern already
+     used for HYG/d3-celestial, which in hindsight was the right call
+     here too; the earlier size-based judgment call (see the removed
+     paragraph this replaced) was wrong. The dataset is CC BY 4.0, ~34,000
+     entries, ~3.3MB raw / ~765KB gzipped, loaded lazily (only when
+     `LocationPicker` actually mounts, i.e. only for the fraction of
+     sessions where geolocation fails) and cached in a dedicated
+     IndexedDB database (`src/data/loaders/cityLoader.ts`) rather than
+     the star catalog's, since sharing one database name across
+     independent loader modules would require them to coordinate a
+     single schema-version/upgrade path.

@@ -48,6 +48,24 @@ shipped in `public/data/`.
   (`src/content/constellations.ts`); "brightest stars" is computed at
   runtime from the HYG catalog already loaded for Phase 3/4.
 
+### GeoNames (world cities, for the manual location picker)
+
+- **Source:** [GeoNames](https://www.geonames.org) `cities15000` export
+  — every city with population > 15,000, or a national capital
+  regardless of size (~34,000 entries).
+- **License:** [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+  Attribution required.
+- **Used for:** `LocationPicker`'s city search fallback when geolocation
+  is denied/unavailable (Phase 7) — see `scripts/build-cities.ts`.
+  Initially hand-curated to ~130 cities, which turned out to have far
+  too little coverage in practice (e.g. only 5 Indian cities, missing
+  Pune, Hyderabad, Ahmedabad, Jaipur, and thousands more); replaced with
+  this real dataset once that gap surfaced during testing.
+- **Processing:** country codes resolved to full English names via
+  GeoNames' own `countryInfo.txt`; sorted by population descending so
+  search results favor larger, more likely-intended cities within each
+  match tier.
+
 Planned sources, to be added (with license details confirmed at
 integration time) as their phase lands:
 

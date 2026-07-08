@@ -1,7 +1,8 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { useId, useMemo, useState, type FormEvent } from 'react'
-import { CITIES, type City } from '@/data/cities'
+import { useCities } from '@/hooks/useCities'
 import { useDismissablePanel } from '@/hooks/useDismissablePanel'
+import type { City } from '@/types/city'
 import { GlassPanel } from '@/ui/primitives/GlassPanel'
 
 export interface LocationPickerProps {
@@ -16,17 +17,29 @@ export interface LocationPickerProps {
 
 const MAX_RESULTS = 8
 
+/** Lower is a better match. Cities are already population-sorted going
+ * in, so a stable sort by rank alone keeps bigger cities first within
+ * each tier — no separate population tiebreaker needed. */
+function rankMatch(city: City, query: string): number {
+  const name = city.name.toLowerCase()
+  if (name.startsWith(query)) return 0
+  if (name.includes(query)) return 1
+  return 2 // only the country name matched
+}
+
 /**
  * Manual location fallback for "Today's Night Sky" — shown whenever
  * geolocation is denied or unavailable, per the spec's "never a dead
- * end" requirement. City search matches against a curated list
- * (src/data/cities.ts); manual lat/lon entry covers anywhere else or
- * anyone who wants exact coordinates.
+ * end" requirement. City search matches against a real, comprehensive
+ * world cities list (GeoNames, loaded lazily on mount — see
+ * src/data/loaders/cityLoader.ts); manual lat/lon entry covers anywhere
+ * else, or anyone who wants exact coordinates.
  */
 export function LocationPicker({ onSelectLocation, onClose }: LocationPickerProps) {
   const titleId = useId()
   const reducedMotion = useReducedMotion()
   const panelRef = useDismissablePanel<HTMLDivElement>(onClose)
+  const { cities, isLoading, error } = useCities()
 
   const [query, setQuery] = useState('')
   const [manualLat, setManualLat] = useState('')
@@ -36,11 +49,14 @@ export function LocationPicker({ onSelectLocation, onClose }: LocationPickerProp
   const matches = useMemo(() => {
     const trimmed = query.trim().toLowerCase()
     if (trimmed.length === 0) return []
-    return CITIES.filter(
-      (city) =>
-        city.name.toLowerCase().includes(trimmed) || city.country.toLowerCase().includes(trimmed),
-    ).slice(0, MAX_RESULTS)
-  }, [query])
+    return cities
+      .filter(
+        (city) =>
+          city.name.toLowerCase().includes(trimmed) || city.country.toLowerCase().includes(trimmed),
+      )
+      .sort((a, b) => rankMatch(a, trimmed) - rankMatch(b, trimmed))
+      .slice(0, MAX_RESULTS)
+  }, [cities, query])
 
   function handleSelectCity(city: City) {
     onSelectLocation(city.latitude, city.longitude, 'city', `${city.name}, ${city.country}`)
@@ -72,7 +88,7 @@ export function LocationPicker({ onSelectLocation, onClose }: LocationPickerProp
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: offset, opacity: 0 }}
       transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 320, damping: 32 }}
-      className="pointer-events-auto absolute top-1/2 left-1/2 w-[min(90vw,420px)] -translate-x-1/2 -translate-y-1/2"
+      className="pointer-events-auto absolute top-1/2 left-1/2 z-20 w-[min(90vw,420px)] -translate-x-1/2 -translate-y-1/2"
     >
       <GlassPanel
         ref={panelRef}
@@ -105,9 +121,15 @@ export function LocationPicker({ onSelectLocation, onClose }: LocationPickerProp
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="e.g. Tokyo, Nairobi, São Paulo"
-            className="rounded-lg border border-glass-border bg-glass px-3 py-2 text-sm text-star-100 outline-none placeholder:text-star-500 focus:border-accent-400/50"
+            placeholder={isLoading ? 'Loading city list…' : 'e.g. Tokyo, Nairobi, São Paulo'}
+            disabled={isLoading}
+            className="rounded-lg border border-glass-border bg-glass px-3 py-2 text-sm text-star-100 outline-none placeholder:text-star-500 focus:border-accent-400/50 disabled:opacity-60"
           />
+          {error && (
+            <p className="text-xs text-red-400">
+              Couldn't load the city list — enter coordinates directly below instead.
+            </p>
+          )}
           {matches.length > 0 && (
             <ul className="flex flex-col gap-1">
               {matches.map((city) => (
@@ -124,7 +146,7 @@ export function LocationPicker({ onSelectLocation, onClose }: LocationPickerProp
               ))}
             </ul>
           )}
-          {query.trim().length > 0 && matches.length === 0 && (
+          {!isLoading && query.trim().length > 0 && matches.length === 0 && (
             <p className="text-xs text-star-500">
               No matches — try another spelling, or enter coordinates directly below.
             </p>
