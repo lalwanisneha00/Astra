@@ -1,10 +1,13 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { damp } from '@/lib/easing'
 import { clamp } from '@/lib/math'
 import { prefersReducedMotion } from '@/lib/motion'
+import { directionToYawPitch, shortestAngleTarget } from '@/scene/camera/orientation'
 import { useSceneStore } from '@/state/useSceneStore'
+import type { EquatorialCoord } from '@/types/coordinates'
 
 const MIN_FOV = 20
 const MAX_FOV = 100
@@ -13,6 +16,8 @@ const WHEEL_ZOOM_SPEED = 0.05
 const FOV_DAMPING = 10
 const INERTIA_DAMPING = 6
 const VELOCITY_EPSILON = 0.0005
+const FLY_TO_DAMPING = 4
+const FLY_TO_EPSILON = 0.0005
 
 interface PointerPoint {
   x: number
@@ -42,6 +47,14 @@ export function CameraController() {
   const isDraggingRef = useRef(false)
   const eulerRef = useRef(new THREE.Euler(0, 0, 0, 'YXZ'))
 
+  // Eased reorientation toward useSceneStore.flyToTarget (e.g. Phase 7's
+  // "look roughly south" on entering observer mode; Phase 11's search
+  // fly-to will set the same field later).
+  const isFlyingRef = useRef(false)
+  const flyTargetYawRef = useRef(0)
+  const flyTargetPitchRef = useRef(0)
+  const lastFlyToTargetRef = useRef<EquatorialCoord | null>(null)
+
   useEffect(() => {
     const canvas = gl.domElement
     const activePointers = new Map<number, PointerPoint>()
@@ -55,6 +68,7 @@ export function CameraController() {
       canvas.setPointerCapture(event.pointerId)
       activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
       velocityRef.current = { yaw: 0, pitch: 0 }
+      isFlyingRef.current = false
 
       if (activePointers.size === 1) {
         isDraggingRef.current = true
@@ -144,7 +158,30 @@ export function CameraController() {
   }, [gl, perspectiveCamera])
 
   useFrame((_state, delta) => {
-    if (!isDraggingRef.current) {
+    const flyToTarget = useSceneStore.getState().flyToTarget
+    if (flyToTarget && flyToTarget !== lastFlyToTargetRef.current) {
+      lastFlyToTargetRef.current = flyToTarget
+      const direction = equatorialToCartesian(flyToTarget)
+      const { yaw: targetYaw, pitch: targetPitch } = directionToYawPitch(direction)
+      flyTargetYawRef.current = shortestAngleTarget(yawRef.current, targetYaw)
+      flyTargetPitchRef.current = clamp(targetPitch, -MAX_PITCH, MAX_PITCH)
+      isFlyingRef.current = true
+      velocityRef.current = { yaw: 0, pitch: 0 }
+    }
+
+    if (!isDraggingRef.current && isFlyingRef.current) {
+      if (reducedMotion) {
+        yawRef.current = flyTargetYawRef.current
+        pitchRef.current = flyTargetPitchRef.current
+        isFlyingRef.current = false
+      } else {
+        yawRef.current = damp(yawRef.current, flyTargetYawRef.current, FLY_TO_DAMPING, delta)
+        pitchRef.current = damp(pitchRef.current, flyTargetPitchRef.current, FLY_TO_DAMPING, delta)
+        const yawDone = Math.abs(yawRef.current - flyTargetYawRef.current) < FLY_TO_EPSILON
+        const pitchDone = Math.abs(pitchRef.current - flyTargetPitchRef.current) < FLY_TO_EPSILON
+        if (yawDone && pitchDone) isFlyingRef.current = false
+      }
+    } else if (!isDraggingRef.current) {
       yawRef.current += velocityRef.current.yaw * delta
       pitchRef.current = clamp(
         pitchRef.current + velocityRef.current.pitch * delta,

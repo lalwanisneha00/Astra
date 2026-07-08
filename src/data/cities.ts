@@ -1,0 +1,167 @@
+export interface City {
+  name: string
+  country: string
+  latitude: number
+  longitude: number
+}
+
+/**
+ * A curated list of major world cities for the manual location picker
+ * (Phase 7) — capitals and large population centers, not an exhaustive
+ * gazetteer. Coordinates are city centers, accurate to roughly a
+ * kilometer, which is what "what does the sky look like from here"
+ * actually needs; anyone wanting more precision can enter exact lat/lon
+ * directly instead. Hand-compiled from well-established, publicly
+ * documented geographic coordinates rather than pulled from a bundled
+ * dataset — see ATTRIBUTIONS.md.
+ */
+export const CITIES: City[] = [
+  // North America
+  { name: 'New York', country: 'United States', latitude: 40.7128, longitude: -74.006 },
+  { name: 'Los Angeles', country: 'United States', latitude: 34.0522, longitude: -118.2437 },
+  { name: 'Chicago', country: 'United States', latitude: 41.8781, longitude: -87.6298 },
+  { name: 'Houston', country: 'United States', latitude: 29.7604, longitude: -95.3698 },
+  { name: 'San Francisco', country: 'United States', latitude: 37.7749, longitude: -122.4194 },
+  { name: 'Seattle', country: 'United States', latitude: 47.6062, longitude: -122.3321 },
+  { name: 'Miami', country: 'United States', latitude: 25.7617, longitude: -80.1918 },
+  { name: 'Denver', country: 'United States', latitude: 39.7392, longitude: -104.9903 },
+  { name: 'Atlanta', country: 'United States', latitude: 33.749, longitude: -84.388 },
+  { name: 'Boston', country: 'United States', latitude: 42.3601, longitude: -71.0589 },
+  { name: 'Washington, D.C.', country: 'United States', latitude: 38.9072, longitude: -77.0369 },
+  { name: 'Phoenix', country: 'United States', latitude: 33.4484, longitude: -112.074 },
+  { name: 'Anchorage', country: 'United States', latitude: 61.2181, longitude: -149.9003 },
+  { name: 'Honolulu', country: 'United States', latitude: 21.3069, longitude: -157.8583 },
+  { name: 'Toronto', country: 'Canada', latitude: 43.6532, longitude: -79.3832 },
+  { name: 'Vancouver', country: 'Canada', latitude: 49.2827, longitude: -123.1207 },
+  { name: 'Montreal', country: 'Canada', latitude: 45.5019, longitude: -73.5674 },
+  { name: 'Calgary', country: 'Canada', latitude: 51.0447, longitude: -114.0719 },
+  { name: 'Mexico City', country: 'Mexico', latitude: 19.4326, longitude: -99.1332 },
+  { name: 'Guadalajara', country: 'Mexico', latitude: 20.6597, longitude: -103.3496 },
+  { name: 'Havana', country: 'Cuba', latitude: 23.1136, longitude: -82.3666 },
+  { name: 'San José', country: 'Costa Rica', latitude: 9.9281, longitude: -84.0907 },
+  { name: 'Panama City', country: 'Panama', latitude: 8.9824, longitude: -79.5199 },
+
+  // South America
+  { name: 'São Paulo', country: 'Brazil', latitude: -23.5505, longitude: -46.6333 },
+  { name: 'Rio de Janeiro', country: 'Brazil', latitude: -22.9068, longitude: -43.1729 },
+  { name: 'Brasília', country: 'Brazil', latitude: -15.8267, longitude: -47.9218 },
+  { name: 'Buenos Aires', country: 'Argentina', latitude: -34.6037, longitude: -58.3816 },
+  { name: 'Santiago', country: 'Chile', latitude: -33.4489, longitude: -70.6693 },
+  { name: 'Lima', country: 'Peru', latitude: -12.0464, longitude: -77.0428 },
+  { name: 'Bogotá', country: 'Colombia', latitude: 4.711, longitude: -74.0721 },
+  { name: 'Caracas', country: 'Venezuela', latitude: 10.4806, longitude: -66.9036 },
+  { name: 'Quito', country: 'Ecuador', latitude: -0.1807, longitude: -78.4678 },
+  { name: 'Montevideo', country: 'Uruguay', latitude: -34.9011, longitude: -56.1645 },
+  { name: 'La Paz', country: 'Bolivia', latitude: -16.5, longitude: -68.15 },
+  { name: 'Asunción', country: 'Paraguay', latitude: -25.2637, longitude: -57.5759 },
+
+  // Europe
+  { name: 'London', country: 'United Kingdom', latitude: 51.5074, longitude: -0.1278 },
+  { name: 'Edinburgh', country: 'United Kingdom', latitude: 55.9533, longitude: -3.1883 },
+  { name: 'Manchester', country: 'United Kingdom', latitude: 53.4808, longitude: -2.2426 },
+  { name: 'Dublin', country: 'Ireland', latitude: 53.3498, longitude: -6.2603 },
+  { name: 'Paris', country: 'France', latitude: 48.8566, longitude: 2.3522 },
+  { name: 'Marseille', country: 'France', latitude: 43.2965, longitude: 5.3698 },
+  { name: 'Berlin', country: 'Germany', latitude: 52.52, longitude: 13.405 },
+  { name: 'Munich', country: 'Germany', latitude: 48.1351, longitude: 11.582 },
+  { name: 'Madrid', country: 'Spain', latitude: 40.4168, longitude: -3.7038 },
+  { name: 'Barcelona', country: 'Spain', latitude: 41.3851, longitude: 2.1734 },
+  { name: 'Lisbon', country: 'Portugal', latitude: 38.7223, longitude: -9.1393 },
+  { name: 'Rome', country: 'Italy', latitude: 41.9028, longitude: 12.4964 },
+  { name: 'Milan', country: 'Italy', latitude: 45.4642, longitude: 9.19 },
+  { name: 'Amsterdam', country: 'Netherlands', latitude: 52.3676, longitude: 4.9041 },
+  { name: 'Brussels', country: 'Belgium', latitude: 50.8503, longitude: 4.3517 },
+  { name: 'Zurich', country: 'Switzerland', latitude: 47.3769, longitude: 8.5417 },
+  { name: 'Vienna', country: 'Austria', latitude: 48.2082, longitude: 16.3738 },
+  { name: 'Copenhagen', country: 'Denmark', latitude: 55.6761, longitude: 12.5683 },
+  { name: 'Stockholm', country: 'Sweden', latitude: 59.3293, longitude: 18.0686 },
+  { name: 'Oslo', country: 'Norway', latitude: 59.9139, longitude: 10.7522 },
+  { name: 'Helsinki', country: 'Finland', latitude: 60.1699, longitude: 24.9384 },
+  { name: 'Reykjavik', country: 'Iceland', latitude: 64.1466, longitude: -21.9426 },
+  { name: 'Warsaw', country: 'Poland', latitude: 52.2297, longitude: 21.0122 },
+  { name: 'Prague', country: 'Czechia', latitude: 50.0755, longitude: 14.4378 },
+  { name: 'Budapest', country: 'Hungary', latitude: 47.4979, longitude: 19.0402 },
+  { name: 'Bucharest', country: 'Romania', latitude: 44.4268, longitude: 26.1025 },
+  { name: 'Sofia', country: 'Bulgaria', latitude: 42.6977, longitude: 23.3219 },
+  { name: 'Athens', country: 'Greece', latitude: 37.9838, longitude: 23.7275 },
+  { name: 'Belgrade', country: 'Serbia', latitude: 44.7866, longitude: 20.4489 },
+  { name: 'Zagreb', country: 'Croatia', latitude: 45.815, longitude: 15.9819 },
+  { name: 'Kyiv', country: 'Ukraine', latitude: 50.4501, longitude: 30.5234 },
+  { name: 'Moscow', country: 'Russia', latitude: 55.7558, longitude: 37.6173 },
+  { name: 'Saint Petersburg', country: 'Russia', latitude: 59.9311, longitude: 30.3609 },
+  { name: 'Istanbul', country: 'Türkiye', latitude: 41.0082, longitude: 28.9784 },
+
+  // Africa
+  { name: 'Cairo', country: 'Egypt', latitude: 30.0444, longitude: 31.2357 },
+  { name: 'Lagos', country: 'Nigeria', latitude: 6.5244, longitude: 3.3792 },
+  { name: 'Abuja', country: 'Nigeria', latitude: 9.0765, longitude: 7.3986 },
+  { name: 'Nairobi', country: 'Kenya', latitude: -1.2921, longitude: 36.8219 },
+  { name: 'Addis Ababa', country: 'Ethiopia', latitude: 9.0192, longitude: 38.7525 },
+  { name: 'Johannesburg', country: 'South Africa', latitude: -26.2041, longitude: 28.0473 },
+  { name: 'Cape Town', country: 'South Africa', latitude: -33.9249, longitude: 18.4241 },
+  { name: 'Casablanca', country: 'Morocco', latitude: 33.5731, longitude: -7.5898 },
+  { name: 'Algiers', country: 'Algeria', latitude: 36.7538, longitude: 3.0588 },
+  { name: 'Tunis', country: 'Tunisia', latitude: 36.8065, longitude: 10.1815 },
+  { name: 'Accra', country: 'Ghana', latitude: 5.6037, longitude: -0.187 },
+  { name: 'Dakar', country: 'Senegal', latitude: 14.7167, longitude: -17.4677 },
+  { name: 'Kinshasa', country: 'DR Congo', latitude: -4.4419, longitude: 15.2663 },
+  { name: 'Khartoum', country: 'Sudan', latitude: 15.5007, longitude: 32.5599 },
+  { name: 'Luanda', country: 'Angola', latitude: -8.839, longitude: 13.2894 },
+  { name: 'Dar es Salaam', country: 'Tanzania', latitude: -6.7924, longitude: 39.2083 },
+
+  // Middle East
+  { name: 'Dubai', country: 'United Arab Emirates', latitude: 25.2048, longitude: 55.2708 },
+  { name: 'Abu Dhabi', country: 'United Arab Emirates', latitude: 24.4539, longitude: 54.3773 },
+  { name: 'Riyadh', country: 'Saudi Arabia', latitude: 24.7136, longitude: 46.6753 },
+  { name: 'Doha', country: 'Qatar', latitude: 25.2854, longitude: 51.531 },
+  { name: 'Tehran', country: 'Iran', latitude: 35.6892, longitude: 51.389 },
+  { name: 'Baghdad', country: 'Iraq', latitude: 33.3152, longitude: 44.3661 },
+  { name: 'Jerusalem', country: 'Israel', latitude: 31.7683, longitude: 35.2137 },
+  { name: 'Tel Aviv', country: 'Israel', latitude: 32.0853, longitude: 34.7818 },
+  { name: 'Amman', country: 'Jordan', latitude: 31.9454, longitude: 35.9284 },
+  { name: 'Beirut', country: 'Lebanon', latitude: 33.8938, longitude: 35.5018 },
+
+  // Asia
+  { name: 'Tokyo', country: 'Japan', latitude: 35.6762, longitude: 139.6503 },
+  { name: 'Osaka', country: 'Japan', latitude: 34.6937, longitude: 135.5023 },
+  { name: 'Seoul', country: 'South Korea', latitude: 37.5665, longitude: 126.978 },
+  { name: 'Beijing', country: 'China', latitude: 39.9042, longitude: 116.4074 },
+  { name: 'Shanghai', country: 'China', latitude: 31.2304, longitude: 121.4737 },
+  { name: 'Hong Kong', country: 'China', latitude: 22.3193, longitude: 114.1694 },
+  { name: 'Guangzhou', country: 'China', latitude: 23.1291, longitude: 113.2644 },
+  { name: 'Taipei', country: 'Taiwan', latitude: 25.033, longitude: 121.5654 },
+  { name: 'Delhi', country: 'India', latitude: 28.6139, longitude: 77.209 },
+  { name: 'Mumbai', country: 'India', latitude: 19.076, longitude: 72.8777 },
+  { name: 'Bengaluru', country: 'India', latitude: 12.9716, longitude: 77.5946 },
+  { name: 'Kolkata', country: 'India', latitude: 22.5726, longitude: 88.3639 },
+  { name: 'Chennai', country: 'India', latitude: 13.0827, longitude: 80.2707 },
+  { name: 'Karachi', country: 'Pakistan', latitude: 24.8607, longitude: 67.0011 },
+  { name: 'Lahore', country: 'Pakistan', latitude: 31.5497, longitude: 74.3436 },
+  { name: 'Islamabad', country: 'Pakistan', latitude: 33.6844, longitude: 73.0479 },
+  { name: 'Dhaka', country: 'Bangladesh', latitude: 23.8103, longitude: 90.4125 },
+  { name: 'Kathmandu', country: 'Nepal', latitude: 27.7172, longitude: 85.324 },
+  { name: 'Colombo', country: 'Sri Lanka', latitude: 6.9271, longitude: 79.8612 },
+  { name: 'Yangon', country: 'Myanmar', latitude: 16.8409, longitude: 96.1735 },
+  { name: 'Bangkok', country: 'Thailand', latitude: 13.7563, longitude: 100.5018 },
+  { name: 'Hanoi', country: 'Vietnam', latitude: 21.0278, longitude: 105.8342 },
+  { name: 'Ho Chi Minh City', country: 'Vietnam', latitude: 10.8231, longitude: 106.6297 },
+  { name: 'Phnom Penh', country: 'Cambodia', latitude: 11.5564, longitude: 104.9282 },
+  { name: 'Kuala Lumpur', country: 'Malaysia', latitude: 3.139, longitude: 101.6869 },
+  { name: 'Singapore', country: 'Singapore', latitude: 1.3521, longitude: 103.8198 },
+  { name: 'Jakarta', country: 'Indonesia', latitude: -6.2088, longitude: 106.8456 },
+  { name: 'Manila', country: 'Philippines', latitude: 14.5995, longitude: 120.9842 },
+  { name: 'Ulaanbaatar', country: 'Mongolia', latitude: 47.8864, longitude: 106.9057 },
+  { name: 'Almaty', country: 'Kazakhstan', latitude: 43.222, longitude: 76.8512 },
+  { name: 'Tashkent', country: 'Uzbekistan', latitude: 41.2995, longitude: 69.2401 },
+
+  // Oceania
+  { name: 'Sydney', country: 'Australia', latitude: -33.8688, longitude: 151.2093 },
+  { name: 'Melbourne', country: 'Australia', latitude: -37.8136, longitude: 144.9631 },
+  { name: 'Brisbane', country: 'Australia', latitude: -27.4698, longitude: 153.0251 },
+  { name: 'Perth', country: 'Australia', latitude: -31.9505, longitude: 115.8605 },
+  { name: 'Adelaide', country: 'Australia', latitude: -34.9285, longitude: 138.6007 },
+  { name: 'Auckland', country: 'New Zealand', latitude: -36.8485, longitude: 174.7633 },
+  { name: 'Wellington', country: 'New Zealand', latitude: -41.2865, longitude: 174.7762 },
+  { name: 'Suva', country: 'Fiji', latitude: -18.1416, longitude: 178.4419 },
+  { name: 'Port Moresby', country: 'Papua New Guinea', latitude: -9.4438, longitude: 147.1803 },
+]

@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { useEffect, useId, useRef } from 'react'
+import { useId } from 'react'
+import { useDismissablePanel } from '@/hooks/useDismissablePanel'
 import { GlassPanel } from '@/ui/primitives/GlassPanel'
 
 export interface InfoPanelFact {
@@ -42,41 +43,9 @@ export function InfoPanel({
   related,
   onClose,
 }: InfoPanelProps) {
-  const panelRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
   const reducedMotion = useReducedMotion()
-
-  useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null
-    panelRef.current?.focus()
-
-    return () => {
-      previouslyFocused?.focus?.()
-    }
-  }, [])
-
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        event.stopPropagation()
-        onClose()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown, true)
-    return () => document.removeEventListener('keydown', handleKeyDown, true)
-  }, [onClose])
-
-  useEffect(() => {
-    function handlePointerDown(event: PointerEvent) {
-      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
-        onClose()
-      }
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown)
-    return () => document.removeEventListener('pointerdown', handlePointerDown)
-  }, [onClose])
+  const panelRef = useDismissablePanel<HTMLDivElement>(onClose)
 
   const offset = reducedMotion ? 0 : 32
 
