@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { wasDrag } from '@/scene/picking/dragGuard'
+import { hitsAnotherObject } from '@/scene/picking/interactionPriority'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import type { Constellation } from '@/types/constellation'
 
@@ -42,6 +43,12 @@ export function ConstellationFigure({ constellation }: ConstellationFigureProps)
 
   function handleClick(event: ThreeEvent<MouseEvent>) {
     if (wasDrag()) return
+    // See interactionPriority.ts's doc comment: a constellation line
+    // passing near a DSO/planet marker (e.g. Orion's sword right next
+    // to M42) can otherwise out-rank and swallow a click meant for that
+    // marker. Defer if this same ray also hit something with its own
+    // handler.
+    if (hitsAnotherObject(event.intersections, event.eventObject)) return
     event.stopPropagation()
     select({ type: 'constellation', id: constellation.id })
   }

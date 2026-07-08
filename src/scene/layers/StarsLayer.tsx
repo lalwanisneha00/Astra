@@ -5,6 +5,7 @@ import type { StarCatalog } from '@/hooks/useStarCatalog'
 import { prefersReducedMotion } from '@/lib/motion'
 import { MAGNITUDE_FADE_WIDTH, starMagnitudeCutoff } from '@/scene/exploration'
 import { wasDrag } from '@/scene/picking/dragGuard'
+import { hitsAnotherObject } from '@/scene/picking/interactionPriority'
 import { fovScaledPointThreshold } from '@/scene/picking/pointThreshold'
 import fragmentShader from '@/scene/shaders/starField.frag.glsl?raw'
 import vertexShader from '@/scene/shaders/starField.vert.glsl?raw'
@@ -155,6 +156,14 @@ export function StarsLayer({
 
   const handlePointerMove = useCallback(
     (event: ThreeEvent<PointerEvent>) => {
+      // See interactionPriority.ts: a star's threshold-based hit can
+      // out-rank a precisely-clicked DSO/planet/Sun/Moon marker at the
+      // same radius, so defer to it rather than showing a star hover
+      // highlight over what's actually a different object.
+      if (hitsAnotherObject(event.intersections, event.eventObject)) {
+        setHoveredIndex(-1)
+        return
+      }
       event.stopPropagation()
       const index = event.index ?? -1
       setHoveredIndex(index >= 0 && isCulled(index) ? -1 : index)
@@ -169,6 +178,11 @@ export function StarsLayer({
   const handleClick = useCallback(
     (event: ThreeEvent<MouseEvent>) => {
       if (wasDrag()) return
+      // See interactionPriority.ts's doc comment for why this check is
+      // necessary: without it, a star can silently swallow a click
+      // meant for a DSO/planet/Sun/Moon marker sitting at the same
+      // on-screen position.
+      if (hitsAnotherObject(event.intersections, event.eventObject)) return
       event.stopPropagation()
       if (event.index === undefined || isCulled(event.index)) return
       const star = starsRef.current[event.index]

@@ -6,6 +6,7 @@ import { damp } from '@/lib/easing'
 import { clamp } from '@/lib/math'
 import { prefersReducedMotion } from '@/lib/motion'
 import { directionToYawPitch, shortestAngleTarget } from '@/scene/camera/orientation'
+import { stepZoomTarget } from '@/scene/camera/zoom'
 import { addDragDistance, resetDragDistance } from '@/scene/picking/dragGuard'
 import { useSceneStore } from '@/state/useSceneStore'
 import type { EquatorialCoord } from '@/types/coordinates'
@@ -13,12 +14,27 @@ import type { EquatorialCoord } from '@/types/coordinates'
 const MIN_FOV = 20
 const MAX_FOV = 100
 const MAX_PITCH = THREE.MathUtils.degToRad(85)
-const WHEEL_ZOOM_SPEED = 0.05
 const FOV_DAMPING = 10
 const INERTIA_DAMPING = 6
 const VELOCITY_EPSILON = 0.0005
 const FLY_TO_DAMPING = 4
 const FLY_TO_EPSILON = 0.0005
+
+// Zoom target now advances in log-FOV space (see zoom.ts) driven by a
+// velocity — degrees-per-second-equivalent, but expressed as log-FOV
+// units per second — rather than jumping straight to a new target on
+// every wheel tick. This is what turns zoom from a series of discrete
+// optical steps into what reads as continuous travel: a flick keeps
+// coasting and decaying smoothly (same "momentum" feel `INERTIA_DAMPING`
+// already gives rotation), and the same relative step size applies
+// whether the camera is near the wide baseline or deep in the
+// exploration levels.
+const WHEEL_ZOOM_IMPULSE = 0.0032
+const ZOOM_INERTIA_DAMPING = 5
+const ZOOM_VELOCITY_EPSILON = 0.0005
+// How many degrees of FOV before either hard limit the zoom starts
+// visibly slowing — turns "hits a wall" into "arrives and settles."
+const ZOOM_EDGE_BAND_DEG = 12
 
 interface PointerPoint {
   x: number
@@ -60,6 +76,12 @@ export function CameraController() {
   const isDraggingRef = useRef(false)
   const eulerRef = useRef(new THREE.Euler(0, 0, 0, 'YXZ'))
 
+  // Zoom velocity, in log-FOV units per second — see the WHEEL_ZOOM_IMPULSE
+  // comment above and zoom.ts. Wheel ticks add an impulse; pinch sets it
+  // directly from the gesture's instantaneous rate; both decay through the
+  // same momentum curve every frame.
+  const zoomVelocityRef = useRef(0)
+
   // Eased reorientation toward useSceneStore.flyToTarget (e.g. Phase 7's
   // "look roughly south" on entering observer mode; Phase 11's search
   // fly-to will set the same field later).
@@ -74,6 +96,7 @@ export function CameraController() {
     let lastPointer: PointerPoint | null = null
     let lastMoveTime = 0
     let pinchLastDistance: number | null = null
+    let lastPinchTime = 0
 
     const handlePointerDown = (event: PointerEvent) => {
       if (event.pointerType === 'mouse' && event.button !== 0) return
@@ -102,6 +125,8 @@ export function CameraController() {
         isDraggingRef.current = false
         const [a, b] = [...activePointers.values()]
         pinchLastDistance = a && b ? distanceBetween(a, b) : null
+        lastPinchTime = performance.now()
+        zoomVelocityRef.current = 0
       }
     }
 
@@ -114,9 +139,18 @@ export function CameraController() {
         if (a && b) {
           const distance = distanceBetween(a, b)
           if (pinchLastDistance) {
-            const store = useSceneStore.getState()
+            // Fingers spreading (ratio > 1) means zooming in, i.e.
+            // decreasing FOV — negative velocity, matching
+            // stepZoomTarget's log-FOV convention. Setting (not adding
+            // to) velocity here keeps the gesture directly, precisely
+            // tracking finger movement while it's active; only after
+            // release does this last value coast and decay like a wheel
+            // flick's momentum (see the useFrame loop below).
+            const now = performance.now()
+            const dt = Math.max((now - lastPinchTime) / 1000, 1 / 240)
             const ratio = distance / pinchLastDistance
-            store.setTargetFov(clamp(store.targetFov / ratio, MIN_FOV, MAX_FOV))
+            zoomVelocityRef.current = -Math.log(ratio) / dt
+            lastPinchTime = now
           }
           pinchLastDistance = distance
         }
@@ -187,8 +221,31 @@ export function CameraController() {
 
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault()
-      const store = useSceneStore.getState()
-      store.setTargetFov(clamp(store.targetFov + event.deltaY * WHEEL_ZOOM_SPEED, MIN_FOV, MAX_FOV))
+      if (reducedMotion) {
+        // No coast to animate through: apply the impulse's total
+        // eventual effect (impulse / damping-rate is the same integral
+        // the velocity system below would otherwise settle to) in one
+        // step, via the same stepZoomTarget curve so the edge-softening
+        // behavior stays identical either way.
+        const store = useSceneStore.getState()
+        const totalLogFovChange = (event.deltaY * WHEEL_ZOOM_IMPULSE) / ZOOM_INERTIA_DAMPING
+        store.setTargetFov(
+          stepZoomTarget(
+            store.targetFov,
+            totalLogFovChange,
+            1,
+            MIN_FOV,
+            MAX_FOV,
+            ZOOM_EDGE_BAND_DEG,
+          ),
+        )
+        return
+      }
+      // An impulse, not a direct target jump: rapid scrolling
+      // accumulates velocity (a natural "accelerating" feel) and a
+      // single flick coasts to a stop afterward instead of halting the
+      // instant the wheel stops moving — see the useFrame loop below.
+      zoomVelocityRef.current += event.deltaY * WHEEL_ZOOM_IMPULSE
     }
 
     const handleContextMenu = (event: Event) => event.preventDefault()
@@ -213,7 +270,7 @@ export function CameraController() {
         document.exitPointerLock()
       }
     }
-  }, [gl, perspectiveCamera])
+  }, [gl, perspectiveCamera, reducedMotion])
 
   useFrame((_state, delta) => {
     const flyToTarget = useSceneStore.getState().flyToTarget
@@ -261,7 +318,33 @@ export function CameraController() {
     eulerRef.current.set(pitchRef.current, yawRef.current, 0, 'YXZ')
     perspectiveCamera.quaternion.setFromEuler(eulerRef.current)
 
-    const { targetFov, setFov } = useSceneStore.getState()
+    const sceneStore = useSceneStore.getState()
+    let targetFov = sceneStore.targetFov
+
+    // Zoom momentum: velocity advances the target in log-FOV space (see
+    // zoom.ts) every frame, then decays — the same coast-and-settle
+    // feel INERTIA_DAMPING already gives rotation, applied here so
+    // zooming reads as continuous travel rather than discrete optical
+    // steps.
+    if (zoomVelocityRef.current !== 0) {
+      targetFov = stepZoomTarget(
+        targetFov,
+        zoomVelocityRef.current,
+        delta,
+        MIN_FOV,
+        MAX_FOV,
+        ZOOM_EDGE_BAND_DEG,
+      )
+      sceneStore.setTargetFov(targetFov)
+    }
+
+    if (reducedMotion) {
+      zoomVelocityRef.current = 0
+    } else {
+      zoomVelocityRef.current = damp(zoomVelocityRef.current, 0, ZOOM_INERTIA_DAMPING, delta)
+      if (Math.abs(zoomVelocityRef.current) < ZOOM_VELOCITY_EPSILON) zoomVelocityRef.current = 0
+    }
+
     const nextFov = reducedMotion
       ? targetFov
       : damp(perspectiveCamera.fov, targetFov, FOV_DAMPING, delta)
@@ -269,7 +352,7 @@ export function CameraController() {
     if (Math.abs(nextFov - perspectiveCamera.fov) > 1e-3) {
       perspectiveCamera.fov = nextFov
       perspectiveCamera.updateProjectionMatrix()
-      setFov(nextFov)
+      sceneStore.setFov(nextFov)
     }
   })
 

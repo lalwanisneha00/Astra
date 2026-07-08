@@ -1153,3 +1153,89 @@ earlier, separately-paused polish-pass batches (Today's Night Sky
 horizon fade/zenith marker, navigation tuning, orbit-trail fade,
 info-panel typography, perf/a11y review) remain paused, to be resumed
 only if explicitly requested again.
+
+## Interaction polish: cinematic zoom + click-priority fix
+
+Two follow-up refinements requested after the redesign above shipped,
+addressing how the zoom actually *feels* and a real click-handling
+regression the drag-guard fix had quietly introduced. Both preserve the
+existing render model (camera fixed at the origin, FOV-only "zoom," one
+celestial sphere radius for every object type) — no architecture change.
+
+### Zoom redesign: log-space momentum, not discrete optical steps
+
+- **Root feel problem**: zoom was a direct, linear `targetFov +=
+  deltaY * WHEEL_ZOOM_SPEED` jump, single-damped toward the display FOV.
+  Two things made this read as "enlarging an image" rather than
+  "traveling": the mapping was *additive* (a fixed absolute FOV step
+  regardless of current zoom, unlike pinch's already-multiplicative
+  ratio), and there was no momentum — input stopped, motion stopped.
+  Hitting `MIN_FOV`/`MAX_FOV` was a hard `clamp()`, a literal wall.
+- **`src/scene/camera/zoom.ts`** (new, pure, tested): `stepZoomTarget`
+  advances the FOV target in *log space* rather than linear degrees, so
+  a wheel notch or pinch ratio produces the same *relative* zoom step
+  whether the camera is near the wide baseline or deep in the
+  exploration levels — the same reason real distance scales (map zoom
+  levels, camera dollies) are conventionally multiplicative, not
+  additive. `zoomEdgeResistance` tapers the velocity's effect smoothly
+  to 0 as the target nears `MIN_FOV`/`MAX_FOV` (a `smoothstep01` band,
+  new shared helper moved into `lib/math.ts` out of `exploration.ts`),
+  so the boundary reads as arriving and settling rather than hitting a
+  wall — the hard `clamp()` is still there as a numerical safety net,
+  but rarely what's actually perceived.
+- **`CameraController.tsx`**: wheel ticks now add an *impulse* to a
+  `zoomVelocityRef` (log-FOV units/second) instead of jumping the target
+  directly; every frame, `stepZoomTarget` advances the target by that
+  velocity, which then decays via the same `damp()`-based inertia
+  `INERTIA_DAMPING` already gives rotation (own `ZOOM_INERTIA_DAMPING`
+  constant). Pinch sets velocity directly from the gesture's
+  instantaneous rate each touch-move (precise tracking while active),
+  so releasing a fast pinch coasts on the same curve a wheel flick does.
+  Sustained scrolling naturally reaches a bounded "terminal velocity"
+  (impulse-rate balances decay-rate) rather than accelerating forever.
+  Reduced-motion users get the wheel's total eventual effect applied in
+  one step (`impulse / ZOOM_INERTIA_DAMPING`, the same integral the
+  velocity system would otherwise settle to) through the *same*
+  `stepZoomTarget` curve, so the edge-softening behavior is identical
+  either way — just without the coast to animate through.
+- Camera orientation (yaw/pitch) is untouched by any of this — zoom only
+  ever writes `targetFov`/`zoomVelocityRef`, so the center of focus never
+  drifts during a zoom gesture. The existing Earth-to-Universe reveal
+  system (`exploration.ts`, Batch 3/4) reads only `camera.fov` each
+  frame, so it's unaffected by *how* that value now arrives — the fades
+  it already does just ride a smoother, momentum-driven FOV curve now.
+
+### Click-priority fix: stars and constellation lines were starving every other object
+
+- **Root cause, verified against Three.js/react-three-fiber source, not
+  guessed**: `Points.raycast` and `Line.raycast` report a hit's
+  `distance` as the distance to the *closest point on the ray itself* to
+  the star/segment (`Ray.distanceSqToPoint` / `distanceSqToSegment`),
+  not the star's true position. Since a flat billboard mesh (DSO/
+  planet/Sun/Moon marker) tangent to the celestial sphere only equals
+  the sphere's true radius exactly at its own center, this makes a
+  nearby star or constellation line's reported distance *systematically
+  less than* a marker's real, exact mesh-intersection distance at the
+  same nominal radius. React-three-fiber dispatches click events
+  nearest-first and stops at the first `stopPropagation()` — so with
+  every star/line's `handleClick` calling `stopPropagation()`
+  unconditionally, a star or line within click range would silently
+  consume the event before the real target's own handler ever ran. In
+  practice, since ~40,000+ stars densely cover the sky, virtually any
+  click near a DSO/planet/Sun/Moon marker was also "near" some star,
+  which is exactly why only stars ever seemed to respond.
+- **`src/scene/picking/interactionPriority.ts`** (new, pure, tested):
+  `hitsAnotherObject(intersections, self)` — true if the same raycast
+  also hit a *different* object with its own handler. Both `StarsLayer`
+  (click and hover) and `ConstellationFigure` (click) check this first
+  and, if true, return without calling `stopPropagation()` — letting
+  r3f's event dispatch continue naturally to the next (real) intersected
+  object's own handler instead of the star/line consuming it. DSO/
+  planet/Sun/Moon markers need no equivalent check: their raycasts are
+  exact mesh intersections with no such bias, so legitimate ties between
+  two of them already resolve correctly by true distance.
+- Deliberately *not* a reduced clickable area: the FOV-scaled point/line
+  thresholds (`fovScaledPointThreshold`) are untouched, so stars and
+  constellation lines remain exactly as easy to hit as before — this
+  only changes *priority* when a click also lands on something more
+  specific.

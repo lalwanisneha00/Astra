@@ -1,5 +1,5 @@
-import { clamp } from '@/lib/math'
 import { DSO_CONTENT } from '@/content/dso'
+import { clamp, smoothstep01 } from '@/lib/math'
 import type { DeepSkyObject } from '@/types/deepSkyObject'
 
 /**
@@ -30,11 +30,6 @@ const FADE_BAND_FOV = 12
  * star is revealed enough to still be clickable/hoverable (see
  * StarsLayer's `isRevealed`). */
 export const MAGNITUDE_FADE_WIDTH = 0.5
-
-function smoothstep01(t: number): number {
-  const c = clamp(t, 0, 1)
-  return c * c * (3 - 2 * c)
-}
 
 /** Maps the camera's current FOV to a discrete exploration depth level
  * (1-6) — used for deep-sky object staging (see `dsoRevealLevel`). */
