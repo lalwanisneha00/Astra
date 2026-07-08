@@ -12,13 +12,14 @@ data credits (populated as real catalogs are integrated, starting Phase 3).
 
 ## Status
 
-**Phase 9 of 13**: Mercury through Neptune now render on the sky at
-their real current positions, each clickable for a facts panel (size,
-mass, gravity, moons, orbital/rotation period) and trailing a faint line
-showing its apparent path across the sky over the next/previous few
-months. Combine with the Phase 8 time slider to watch them move. Search
-and the rest of the phase plan are still ahead — see `ARCHITECTURE.md`'s
-phase log.
+**Phase 10 of 13**: ~510 real galaxies, star clusters, and nebulae
+(Andromeda, the Orion Nebula, Saturn's namesake-adjacent Ring Nebula,
+the Pleiades, and hundreds more from the OpenNGC catalog) now render on
+the sky at their real positions, each clickable for a facts panel.
+Mercury through Neptune render at their real current positions too
+(Phase 9), each with a facts panel and a faint line tracing its apparent
+path across the sky. Search and the rest of the phase plan are still
+ahead — see `ARCHITECTURE.md`'s phase log.
 
 ## Getting started
 
@@ -33,18 +34,21 @@ Open the URL Vite prints (typically http://localhost:5173).
 
 ## Scripts
 
-| Script                 | What it does                                               |
-| ---------------------- | ---------------------------------------------------------- |
-| `npm run dev`          | Start the Vite dev server                                  |
-| `npm run build`        | Typecheck (`tsc -b`) and build for production              |
-| `npm run preview`      | Preview the production build locally                       |
-| `npm run typecheck`    | Typecheck only, no build                                   |
-| `npm run lint`         | Lint with ESLint                                           |
-| `npm run format`       | Format the codebase with Prettier                          |
-| `npm run format:check` | Check formatting without writing                           |
-| `npm run test`         | Run the Vitest suite once                                  |
-| `npm run test:watch`   | Run Vitest in watch mode                                   |
-| `npm run build:stars`  | Re-fetch HYG and regenerate `public/data/stars-tier*.json` |
+| Script                         | What it does                                                           |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `npm run dev`                  | Start the Vite dev server                                              |
+| `npm run build`                | Typecheck (`tsc -b`) and build for production                          |
+| `npm run preview`              | Preview the production build locally                                   |
+| `npm run typecheck`            | Typecheck only, no build                                               |
+| `npm run lint`                 | Lint with ESLint                                                       |
+| `npm run format`               | Format the codebase with Prettier                                      |
+| `npm run format:check`         | Check formatting without writing                                       |
+| `npm run test`                 | Run the Vitest suite once                                              |
+| `npm run test:watch`           | Run Vitest in watch mode                                               |
+| `npm run build:stars`          | Re-fetch HYG and regenerate `public/data/stars-tier*.json`             |
+| `npm run build:constellations` | Re-fetch d3-celestial and regenerate `public/data/constellations.json` |
+| `npm run build:cities`         | Re-fetch GeoNames and regenerate `public/data/cities.json`             |
+| `npm run build:dso`            | Re-fetch OpenNGC and regenerate `public/data/dso.json`                 |
 
 ## Tech stack
 

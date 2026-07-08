@@ -2,6 +2,7 @@ import { AnimatePresence } from 'framer-motion'
 import { useEffect, useMemo, useState } from 'react'
 import { horizontalToEquatorial } from '@/astronomy/horizontal'
 import { useConstellations } from '@/hooks/useConstellations'
+import { useDeepSkyObjects } from '@/hooks/useDeepSkyObjects'
 import { useHorizonCulling } from '@/hooks/useHorizonCulling'
 import { usePlanetPositions } from '@/hooks/usePlanetPositions'
 import { useStarCatalog } from '@/hooks/useStarCatalog'
@@ -16,6 +17,7 @@ import { LocationPicker } from '@/ui/controls/LocationPicker'
 import { TimeSlider } from '@/ui/controls/TimeSlider'
 import { TodayButton } from '@/ui/controls/TodayButton'
 import { ConstellationPanel } from '@/ui/panels/ConstellationPanel'
+import { DeepSkyObjectPanel } from '@/ui/panels/DeepSkyObjectPanel'
 import { PlanetPanel } from '@/ui/panels/PlanetPanel'
 import { StarPanel } from '@/ui/panels/StarPanel'
 import { GlassPanel } from '@/ui/primitives/GlassPanel'
@@ -31,6 +33,7 @@ const DEFAULT_OBSERVER_VIEW = { altitude: 30, azimuth: 180 }
 export function App() {
   const starCatalog = useStarCatalog()
   const constellations = useConstellations()
+  const deepSkyObjects = useDeepSkyObjects()
   const selection = useSelectionStore((state) => state.selection)
   const clearSelection = useSelectionStore((state) => state.clearSelection)
   const select = useSelectionStore((state) => state.select)
@@ -80,6 +83,8 @@ export function App() {
       : undefined
   const selectedPlanet =
     selection?.type === 'planet' ? planets.find((p) => p.id === selection.id) : undefined
+  const selectedDso =
+    selection?.type === 'dso' ? deepSkyObjects.find((d) => d.id === selection.id) : undefined
 
   const brightestStarsInSelectedConstellation = selectedConstellation
     ? starCatalog.stars
@@ -94,6 +99,7 @@ export function App() {
         <SceneCanvas
           starCatalog={starCatalog}
           constellations={visibleConstellations}
+          deepSkyObjects={deepSkyObjects}
           observer={observer}
           date={currentDate}
           horizonCullingEnabled={horizonCullingEnabled}
@@ -131,6 +137,13 @@ export function App() {
             <PlanetPanel
               key={`planet-${selectedPlanet.id}`}
               planet={selectedPlanet}
+              onClose={clearSelection}
+            />
+          )}
+          {selectedDso && (
+            <DeepSkyObjectPanel
+              key={`dso-${selectedDso.id}`}
+              dso={selectedDso}
               onClose={clearSelection}
             />
           )}

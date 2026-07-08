@@ -597,3 +597,58 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   make Mercury an invisible speck next to Jupiter at this fixed-radius
   rendering scale) and a soft additive glow sprite behind every body for
   an atmospheric-halo feel.
+
+### Phase 10 — Deep-sky objects: galaxies, star clusters, nebulae
+
+- **`scripts/build-dso.ts`** fetches OpenNGC's combined NGC/IC CSV via
+  `csv-parse/sync` (the same library `build-stars.ts` already uses,
+  configured with `delimiter: ';'` since OpenNGC isn't comma-delimited)
+  and curates the ~14,000-entry catalog down to ~510 objects: anything
+  with a Messier number, a common name, or magnitude ≤ 9.5. The full
+  catalog is overwhelmingly faint, barely-resolved background galaxies
+  with no popular relevance — the same "curate for relevance" judgment
+  call already made for star tiers (Phase 3) and city search coverage
+  (Phase 7), not an attempt to ship "every known object."
+- **Fixed positions, unlike planets**: DSOs sit at fixed equatorial J2000
+  coordinates like stars/constellations — `DsoMarker` has no per-date
+  recomputation and no orbit trail, unlike `PlanetMarker`. The only
+  thing that changes with time is horizon visibility in observer mode.
+- **`DeepSkyLayer`** applies that horizon check with a plain CPU
+  `equatorialToHorizontal` call per object (memoized on
+  `[objects, observer, date]`), same reasoning as `PlanetsLayer`: ~510
+  objects is nowhere near the scale that made `StarsLayer`'s GPU-side
+  discard (Phase 8) necessary.
+- **`DsoMarker`** reuses `PlanetMarker`'s billboard-sprite technique
+  (immune to true-sphere perspective distortion at wide FOV) but with a
+  different texture per `DsoTypeMeta.icon` kind
+  (`scene/textures/dsoTexture.ts`): a dense round glow for globular
+  clusters, a scatter of small bright points for open clusters, an
+  elongated squashed smudge for galaxies, a glowing ring (not a filled
+  disc) for planetary nebulae, and an irregular blotchy cloud — several
+  overlapping soft blobs rather than one perfect circle — for every
+  other nebula type. Several raw OpenNGC type codes (`Neb`, `SNR`,
+  `HII`, `RfN`) intentionally share the generic nebula texture,
+  distinguished only by tint and the info panel's type label, rather
+  than each getting a bespoke shape — keeps the texture set legible at
+  small marker sizes instead of over-differentiating types that would
+  look identical at a glance anyway. Marker size scales with
+  `sizeArcmin` (compressed through a sqrt, same reasoning as
+  `PlanetContent.relativeSize`) so Andromeda reads as visibly bigger
+  than a barely-resolved planetary nebula.
+- **No always-on labels**: unlike constellation names (88, shown by
+  default) or planet names (7, always shown), ~510 DSO labels rendered
+  simultaneously as drei `<Html>` DOM nodes would clutter the sky badly
+  and cost real DOM overhead — `DsoMarker` only renders its label when
+  selected, relying on the info panel otherwise. This mirrors why
+  `starNames` already defaults to off in `useLayersStore`.
+- **Curated content** (`src/content/dso.ts`) follows `STAR_CONTENT`'s
+  graceful-degradation pattern exactly: ten of the most iconic objects
+  (Andromeda, Orion Nebula, Crab Nebula, Ring Nebula, Whirlpool Galaxy,
+  Triangulum Galaxy, Pleiades, M13, Beehive Cluster, Dumbbell Nebula)
+  get hand-written descriptions/fun facts; the rest show only their
+  real catalog data.
+- **Known gap, deliberately patched**: the Pleiades (M45) isn't in
+  OpenNGC at all — catalogued under Collinder/Melotte, not NGC/IC — so
+  `build-dso.ts` adds it by hand with real, verified coordinates (id
+  `Mel022`) rather than silently shipping an atlas missing one of the
+  most recognizable objects in the sky. See ATTRIBUTIONS.md.

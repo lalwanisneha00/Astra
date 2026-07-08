@@ -66,17 +66,48 @@ shipped in `public/data/`.
   search results favor larger, more likely-intended cities within each
   match tier.
 
+### OpenNGC (deep-sky objects)
+
+- **Source:** [OpenNGC](https://github.com/mattiaverga/OpenNGC) by
+  Mattia Verga & contributors — `database_files/NGC.csv`.
+- **License:** CC-BY-SA-4.0. Attribution required; any redistributed
+  derivative (including `public/data/dso.json`, built by
+  `scripts/build-dso.ts`) must remain under the same license.
+- **Used for:** positions (RA/Dec), type, magnitude, apparent size,
+  Messier cross-reference, and common names for galaxies, star clusters,
+  and nebulae — see `scripts/build-dso.ts` for the exact field mapping
+  and `src/types/deepSkyObject.ts` for the shape shipped to the client.
+- **Processing:** the full catalog has ~14,000 entries, the vast
+  majority barely-resolved catalog galaxies with no popular relevance to
+  an educational atlas. Curated down to ~510 objects: anything with a
+  Messier number, a common name, or V-mag/B-mag ≤ 9.5 — the same
+  "curate for relevance, not completeness" call already made for star
+  tiers and city search coverage. RA/Dec converted from OpenNGC's
+  sexagesimal strings to this project's standard decimal-degree
+  convention.
+- **Known gap:** the Pleiades (M45) isn't in OpenNGC at all — it's
+  catalogued under Collinder/Melotte, not NGC/IC. Added by hand with
+  real, verified coordinates and data rather than silently shipping an
+  atlas missing one of the sky's most recognizable objects (id
+  `Mel022` in `dso.json`).
+
+### Planet physical facts (Phase 9)
+
+Unlike every dataset above, `src/content/planets.ts` isn't built from a
+processed, redistributed source file — the physical facts for the seven
+planets (diameter, mass, gravity, moon count, orbital/rotation period,
+mean distance) are hand-authored, cross-checked against widely-published
+figures (e.g. NASA's Planetary Fact Sheets, nssdc.gsfc.nasa.gov), the
+same way the hand-written star/constellation prose content is. Planet,
+Sun, and Moon _positions_ are computed at runtime by `astronomy-engine`
+(MIT license) — not a static dataset either.
+
 Planned sources, to be added (with license details confirmed at
 integration time) as their phase lands:
 
-| Dataset                                           | Used for                                                      | Planned in |
-| ------------------------------------------------- | ------------------------------------------------------------- | ---------- |
-| IAU WGSN official star names                      | Supplementary proper names                                    | Phase 3+   |
-| [OpenNGC](https://github.com/mattiaverga/OpenNGC) | Deep-sky objects (NGC/IC, Messier cross-refs)                 | Phase 10   |
-| NASA Planetary Fact Sheets (nssdc.gsfc.nasa.gov)  | Planet physical facts (moons, periods, temperature, diameter) | Phase 9    |
-
-Planet, Sun, and Moon _positions_ are computed at runtime by
-`astronomy-engine` (MIT license) — not a static dataset.
+| Dataset                      | Used for                   | Planned in |
+| ---------------------------- | -------------------------- | ---------- |
+| IAU WGSN official star names | Supplementary proper names | Phase 3+   |
 
 ## Software
 

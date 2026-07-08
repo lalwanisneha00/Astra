@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "build:stars": "tsx scripts/build-stars.ts",
     "build:constellations": "tsx scripts/build-constellations.ts",
-    "build:cities": "tsx scripts/build-cities.ts"
+    "build:cities": "tsx scripts/build-cities.ts",
+    "build:dso": "tsx scripts/build-dso.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

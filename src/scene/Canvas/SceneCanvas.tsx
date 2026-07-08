@@ -2,6 +2,7 @@ import { Canvas } from '@react-three/fiber'
 import type { StarCatalog } from '@/hooks/useStarCatalog'
 import { CameraController } from '@/scene/camera/CameraController'
 import { ConstellationLayer } from '@/scene/layers/ConstellationLayer'
+import { DeepSkyLayer } from '@/scene/layers/DeepSkyLayer'
 import { GridLayer } from '@/scene/layers/GridLayer'
 import { HorizonLayer } from '@/scene/layers/HorizonLayer'
 import { LabelsLayer } from '@/scene/layers/LabelsLayer'
@@ -9,6 +10,7 @@ import { PlanetsLayer } from '@/scene/layers/PlanetsLayer'
 import { StarsLayer } from '@/scene/layers/StarsLayer'
 import type { Constellation } from '@/types/constellation'
 import type { ObserverLocation } from '@/types/coordinates'
+import type { DeepSkyObject } from '@/types/deepSkyObject'
 
 const INITIAL_FOV = 75
 const NEAR_PLANE = 0.1
@@ -20,6 +22,7 @@ const BACKGROUND_COLOR = '#04060c'
 interface SceneCanvasProps {
   starCatalog: StarCatalog
   constellations: Constellation[]
+  deepSkyObjects: DeepSkyObject[]
   observer: ObserverLocation | null
   date: Date
   horizonCullingEnabled: boolean
@@ -34,6 +37,7 @@ interface SceneCanvasProps {
 export function SceneCanvas({
   starCatalog,
   constellations,
+  deepSkyObjects,
   observer,
   date,
   horizonCullingEnabled,
@@ -58,6 +62,7 @@ export function SceneCanvas({
         altitudes={altitudes}
       />
       <LabelsLayer constellations={constellations} />
+      <DeepSkyLayer objects={deepSkyObjects} observer={observer} date={date} />
       <PlanetsLayer observer={observer} date={date} />
       <HorizonLayer observer={observer} date={date} />
     </Canvas>
