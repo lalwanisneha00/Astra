@@ -14,7 +14,19 @@ export function useDeepSkyObjects(): DeepSkyObject[] {
       try {
         const records = await loadDeepSkyObjects()
         if (cancelled) return
-        setObjects(records)
+
+        const enriched: DeepSkyObject[] = records.map((record) => ({
+          id: record.id,
+          type: record.type,
+          equatorial: { ra: record.ra, dec: record.dec },
+          constellation: record.constellation,
+          magnitude: record.magnitude,
+          sizeArcmin: record.sizeArcmin,
+          messier: record.messier,
+          commonNames: record.commonNames,
+        }))
+
+        setObjects(enriched)
         useDataStore.getState().setCatalogStatus('dso', 'loaded')
       } catch (error) {
         useDataStore.getState().setCatalogStatus('dso', 'error')

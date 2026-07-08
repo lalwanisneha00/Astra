@@ -652,3 +652,22 @@ nodenext` — see `tsconfig.node.json`, now covering `scripts/**` too)
   `build-dso.ts` adds it by hand with real, verified coordinates (id
   `Mel022`) rather than silently shipping an atlas missing one of the
   most recognizable objects in the sky. See ATTRIBUTIONS.md.
+- **Fixed after initial testing**: the app crashed to the `ErrorBoundary`
+  fallback immediately on load. Root cause was a data-shape mismatch,
+  not a stale build: `build-dso.ts` writes flat `ra`/`dec` fields per
+  object, but `dsoLoader.ts` originally fetched the JSON and force-cast
+  it straight to `DeepSkyObject[]` (which expects a nested
+  `equatorial: {ra, dec}`) via `as DsoFile` — a compile-time-only
+  assertion with no runtime check, so TypeScript happily believed
+  `dso.equatorial` existed when it didn't. Every `DsoMarker` then threw
+  immediately trying to read `dso.equatorial.ra`. Fixed by following
+  `constellationLoader.ts`'s existing convention properly instead of
+  half-copying it: the loader now returns the file's actual flat-field
+  shape (a `DsoRecord`, matching `ConstellationRecord`), and
+  `useDeepSkyObjects` assembles the nested `equatorial` domain field —
+  the same split `useConstellations` already uses for its own
+  `labelPosition`. (Also worth noting: a long dev session that never
+  restarts its Vite server accumulates one stale instance per phase's
+  smoke test, each holding its own port — if the sky ever looks
+  frozen/broken in a way a hard refresh doesn't fix, check for and kill
+  stale `vite` processes before assuming it's a code bug.)
