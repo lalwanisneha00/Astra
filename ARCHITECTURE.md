@@ -847,3 +847,27 @@ false, ...)` with a real `Observer` whenever one exists — that call
   object type (a plain `equatorialToHorizontal` check in `SceneCanvas`,
   the same cost class as the per-object checks `PlanetsLayer`/
   `DeepSkyLayer` already do).
+
+### Search: common-name aliases
+
+- **`src/content/aliases.ts`**: `STAR_ALIASES` covers well-known
+  nicknames for the already-curated famous stars (Polaris → "North
+  Star"/"Pole Star"/"Lodestar", Sirius → "Dog Star", ...) — not an
+  attempt to invent a nickname for every named star, since most
+  genuinely don't have one; `CONSTELLATION_ALIASES` covers all 88
+  constellations with their standard English translation, plus a
+  well-known informal nickname where one actually exists (Ursa Major →
+  "Big Dipper"/"The Plough", Crux → "Southern Cross", Cygnus → "Northern
+  Cross"). Folded into `useSearchIndex`'s `keywords` blob, so these
+  match at the same "keyword-only" tier DSO common names/Messier numbers
+  already use.
+- **`useSearchIndex.ts` split into a pure `buildSearchIndex` function
+  plus a thin hook wrapper** — the same pattern `computePlanetPositions`/
+  `usePlanetPositions` already established — specifically so the alias
+  behavior itself could be unit-tested directly
+  (`useSearchIndex.test.ts`: confirms Polaris is findable by each of its
+  three nicknames, Ursa Major by "Big Dipper," and that even a
+  constellation with no special nickname — Aquarius — is still findable
+  by its plain translation, proving every one of the 88 got an entry,
+  not just the famous handful) without needing a component-rendering
+  test harness this project doesn't have.
