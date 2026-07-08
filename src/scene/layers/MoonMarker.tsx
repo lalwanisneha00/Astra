@@ -3,6 +3,7 @@ import { type ThreeEvent } from '@react-three/fiber'
 import { useMemo } from 'react'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
+import { wasDrag } from '@/scene/picking/dragGuard'
 import { createMoonPhaseTexture } from '@/scene/textures/sunMoonTexture'
 import { useLayersStore } from '@/state/useLayersStore'
 import { useSceneStore } from '@/state/useSceneStore'
@@ -47,6 +48,7 @@ export function MoonMarker({ moon }: MoonMarkerProps) {
   }, [moon.equatorial])
 
   function handleClick(event: ThreeEvent<MouseEvent>) {
+    if (wasDrag()) return
     event.stopPropagation()
     select({ type: 'moon', id: 'moon' })
   }

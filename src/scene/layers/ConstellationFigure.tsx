@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
+import { wasDrag } from '@/scene/picking/dragGuard'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import type { Constellation } from '@/types/constellation'
 
@@ -40,6 +41,7 @@ export function ConstellationFigure({ constellation }: ConstellationFigureProps)
   }, [constellation])
 
   function handleClick(event: ThreeEvent<MouseEvent>) {
+    if (wasDrag()) return
     event.stopPropagation()
     select({ type: 'constellation', id: constellation.id })
   }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { StarCatalog } from '@/hooks/useStarCatalog'
 import { prefersReducedMotion } from '@/lib/motion'
+import { wasDrag } from '@/scene/picking/dragGuard'
 import { fovScaledPointThreshold } from '@/scene/picking/pointThreshold'
 import fragmentShader from '@/scene/shaders/starField.frag.glsl?raw'
 import vertexShader from '@/scene/shaders/starField.vert.glsl?raw'
@@ -130,6 +131,7 @@ export function StarsLayer({ catalog, horizonCullingEnabled, altitudes }: StarsL
 
   const handleClick = useCallback(
     (event: ThreeEvent<MouseEvent>) => {
+      if (wasDrag()) return
       event.stopPropagation()
       if (event.index === undefined || isCulled(event.index)) return
       const star = starsRef.current[event.index]

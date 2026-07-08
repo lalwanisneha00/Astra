@@ -6,6 +6,7 @@ import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { DSO_TYPE_META } from '@/content/dsoTypes'
 import { clamp } from '@/lib/math'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
+import { wasDrag } from '@/scene/picking/dragGuard'
 import { getDsoTexture } from '@/scene/textures/dsoTexture'
 import { useLayersStore } from '@/state/useLayersStore'
 import { useSceneStore } from '@/state/useSceneStore'
@@ -61,6 +62,7 @@ export function DsoMarker({ dso }: DsoMarkerProps) {
   }, [dso.equatorial])
 
   function handleClick(event: ThreeEvent<MouseEvent>) {
+    if (wasDrag()) return
     event.stopPropagation()
     select({ type: 'dso', id: dso.id })
   }

@@ -936,3 +936,24 @@ from that plan is folded into this one instead of being done twice.
 - Touch dragging needed no changes — repeated swipes already accumulate
   into the same unbounded `yawRef`, a normal mobile pattern with no
   equivalent screen-edge limit to begin with.
+
+### Small fix — accidental clicks while dragging
+
+- **Root cause**: the browser's native `click` event fires after any
+  pointerdown+pointerup pair on the same element, regardless of how far
+  the pointer moved in between — and since the whole sky is one
+  `<canvas>`, every drag-to-rotate gesture ended in a `click` on
+  whatever star/object happened to be under the cursor at release,
+  opening its info panel even though the user was just rotating the
+  camera.
+- **Fix**: new `src/scene/picking/dragGuard.ts` — a tiny shared module
+  (plain variables + functions, no store needed, matching the
+  imperative-not-reactive style already used for high-frequency camera
+  state) that accumulates total pixel distance moved since the last
+  `pointerdown`, reusing the exact same per-move pixel delta
+  `CameraController` already computes for yaw/pitch. Every object's
+  `onClick` handler (`StarsLayer`, `ConstellationFigure`, `PlanetMarker`,
+  `DsoMarker`, `SunMarker`, `MoonMarker`) now checks `wasDrag()` first
+  and bails out if the pointer moved more than 6px before release —
+  small enough to still register a genuine stationary click/tap, large
+  enough to absorb natural hand jitter.

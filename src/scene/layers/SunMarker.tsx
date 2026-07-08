@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
+import { wasDrag } from '@/scene/picking/dragGuard'
 import { getPlanetGlowTexture } from '@/scene/textures/planetTexture'
 import { getSunTexture } from '@/scene/textures/sunMoonTexture'
 import { useLayersStore } from '@/state/useLayersStore'
@@ -40,6 +41,7 @@ export function SunMarker({ sun }: SunMarkerProps) {
   }, [sun.equatorial])
 
   function handleClick(event: ThreeEvent<MouseEvent>) {
+    if (wasDrag()) return
     event.stopPropagation()
     select({ type: 'sun', id: 'sun' })
   }

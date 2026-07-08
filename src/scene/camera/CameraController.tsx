@@ -6,6 +6,7 @@ import { damp } from '@/lib/easing'
 import { clamp } from '@/lib/math'
 import { prefersReducedMotion } from '@/lib/motion'
 import { directionToYawPitch, shortestAngleTarget } from '@/scene/camera/orientation'
+import { addDragDistance, resetDragDistance } from '@/scene/picking/dragGuard'
 import { useSceneStore } from '@/state/useSceneStore'
 import type { EquatorialCoord } from '@/types/coordinates'
 
@@ -86,6 +87,11 @@ export function CameraController() {
         isDraggingRef.current = true
         lastPointer = { x: event.clientX, y: event.clientY }
         lastMoveTime = performance.now()
+        // Fresh gesture: any accumulated distance from a prior drag no
+        // longer applies (see dragGuard.ts — this is what tells every
+        // object's onClick whether the eventual click was a real click
+        // or the tail end of a drag).
+        resetDragDistance()
         // Best-effort: if denied/unsupported, dragging still works via
         // the absolute-position fallback in handlePointerMove, just
         // bounded by the screen edge again.
@@ -132,6 +138,8 @@ export function CameraController() {
         dx = event.clientX - lastPointer.x
         dy = event.clientY - lastPointer.y
       }
+
+      addDragDistance(dx, dy)
 
       const now = performance.now()
       const deltaTime = Math.max((now - lastMoveTime) / 1000, 1 / 240)

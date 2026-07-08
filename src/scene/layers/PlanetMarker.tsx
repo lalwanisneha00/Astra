@@ -7,6 +7,7 @@ import type { PlanetId } from '@/astronomy/planets'
 import { PLANET_CONTENT } from '@/content/planets'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { PlanetOrbitTrail } from '@/scene/layers/PlanetOrbitTrail'
+import { wasDrag } from '@/scene/picking/dragGuard'
 import { getPlanetGlowTexture, getPlanetTexture } from '@/scene/textures/planetTexture'
 import { useLayersStore } from '@/state/useLayersStore'
 import { useSceneStore } from '@/state/useSceneStore'
@@ -69,6 +70,7 @@ export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
   }, [planet.equatorial])
 
   function handleClick(event: ThreeEvent<MouseEvent>) {
+    if (wasDrag()) return
     event.stopPropagation()
     select({ type: 'planet', id: planet.id })
   }
