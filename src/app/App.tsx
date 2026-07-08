@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useConstellations } from '@/hooks/useConstellations'
 import { useHorizonCulling } from '@/hooks/useHorizonCulling'
 import { useStarCatalog } from '@/hooks/useStarCatalog'
+import { useVisibleConstellations } from '@/hooks/useVisibleConstellations'
 import { useVisibleStarCatalog } from '@/hooks/useVisibleStarCatalog'
 import { SceneCanvas } from '@/scene/Canvas/SceneCanvas'
 import { useLocationStore } from '@/state/useLocationStore'
@@ -40,6 +41,7 @@ export function App() {
 
   const altitudes = useHorizonCulling(starCatalog.stars, observer !== null, observer, currentDate)
   const visibleCatalog = useVisibleStarCatalog(starCatalog, altitudes)
+  const visibleConstellations = useVisibleConstellations(constellations, observer, currentDate)
 
   const selectedStar =
     selection?.type === 'star' ? visibleCatalog.stars.find((s) => s.id === selection.id) : undefined
@@ -60,7 +62,7 @@ export function App() {
       <div className="relative h-dvh w-dvw overflow-hidden bg-space-950">
         <SceneCanvas
           starCatalog={visibleCatalog}
-          constellations={constellations}
+          constellations={visibleConstellations}
           observer={observer}
           date={currentDate}
         />
