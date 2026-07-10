@@ -5,7 +5,7 @@ import type { StarCatalog } from '@/hooks/useStarCatalog'
 import { prefersReducedMotion } from '@/lib/motion'
 import { MAGNITUDE_FADE_WIDTH, starMagnitudeCutoff } from '@/scene/exploration'
 import { wasDrag } from '@/scene/picking/dragGuard'
-import { hitsAnotherObject } from '@/scene/picking/interactionPriority'
+import { hitsHigherPriorityObject, PICK_PRIORITY } from '@/scene/picking/interactionPriority'
 import { fovScaledPointThreshold } from '@/scene/picking/pointThreshold'
 import { selectionPulseIntensity } from '@/scene/selectionPulse'
 import fragmentShader from '@/scene/shaders/starField.frag.glsl?raw'
@@ -197,8 +197,12 @@ export function StarsLayer({
       // See interactionPriority.ts: a star's threshold-based hit can
       // out-rank a precisely-clicked DSO/planet/Sun/Moon marker at the
       // same radius, so defer to it rather than showing a star hover
-      // highlight over what's actually a different object.
-      if (hitsAnotherObject(event.intersections, event.eventObject)) {
+      // highlight over what's actually a different object. Only defers
+      // to *higher*-priority objects (not constellation lines, which are
+      // lower priority) — otherwise a star anchoring a constellation
+      // line would mutually defer with that line and neither would ever
+      // show hover feedback.
+      if (hitsHigherPriorityObject(event.intersections, event.eventObject, PICK_PRIORITY.star)) {
         setHoveredIndex(-1)
         return
       }
@@ -220,7 +224,8 @@ export function StarsLayer({
       // necessary: without it, a star can silently swallow a click
       // meant for a DSO/planet/Sun/Moon marker sitting at the same
       // on-screen position.
-      if (hitsAnotherObject(event.intersections, event.eventObject)) return
+      if (hitsHigherPriorityObject(event.intersections, event.eventObject, PICK_PRIORITY.star))
+        return
       event.stopPropagation()
       if (event.index === undefined || isCulled(event.index)) return
       const star = starsRef.current[event.index]
@@ -233,7 +238,12 @@ export function StarsLayer({
   if (count === 0) return null
 
   return (
-    <points onPointerMove={handlePointerMove} onPointerOut={handlePointerOut} onClick={handleClick}>
+    <points
+      userData={{ pickPriority: PICK_PRIORITY.star }}
+      onPointerMove={handlePointerMove}
+      onPointerOut={handlePointerOut}
+      onClick={handleClick}
+    >
       {/* Keyed on count: only changes when a new tier finishes loading,
           not on every horizon recompute (altitude is a separate,
           in-place-updated attribute, not part of what determines count

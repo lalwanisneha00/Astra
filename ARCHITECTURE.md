@@ -1274,7 +1274,7 @@ performance fix, and attention-pulse animations. No architecture change
 ### Intelligent search navigation
 
 - **`scene/exploration.ts` gained the inverse functions** needed to fly
-  *to* a reveal level rather than just query it:
+  _to_ a reveal level rather than just query it:
   `fovForExplorationLevel(level)` (the FOV that fully reveals a DSO
   level, with a small arrival margin past the fade band) and
   `fovForStarMagnitude(magnitude)` (the mathematical inverse of
@@ -1288,11 +1288,11 @@ performance fix, and attention-pulse animations. No architecture change
   clickable.
 - **`App.tsx`'s `handleSearchSelect`** now checks, for stars and DSOs
   only (constellations/planets/Sun/Moon are always Level-1 baseline,
-  never need this): is the result already revealed at the *current*
+  never need this): is the result already revealed at the _current_
   FOV? If not, `setTargetFov` is set alongside `setFlyToTarget` to the
   FOV that reveals it. Both the yaw/pitch fly-to and the FOV zoom ease
   concurrently in `CameraController`'s existing `useFrame`, so the
-  camera pans *and* travels deeper at once — a single cinematic
+  camera pans _and_ travels deeper at once — a single cinematic
   flight, not two separate motions. "Reveal nearby context along the
   way" needs no extra code: every other object's existing per-frame
   fade already runs off the same FOV, so intermediate objects fade in
@@ -1321,7 +1321,7 @@ performance fix, and attention-pulse animations. No architecture change
   app's performance work exists to avoid.
 - **`StarsLayer`'s shader** gained `uSelectedIndex`/`uSelectionPulse`
   uniforms mirroring the existing `uHoveredIndex` mechanism — the
-  selected star's index is looked up once per selection *change* (a
+  selected star's index is looked up once per selection _change_ (a
   cached ref, not a per-frame scan across ~40,000 stars), and the pulse
   boosts point size/brightness briefly on top of the steady
   selected/hovered highlight.
@@ -1347,7 +1347,7 @@ performance fix, and attention-pulse animations. No architecture change
   when `context` itself legitimately changes in observer mode).
 - **`useDismissablePanel`** (used by all of the above plus `InfoPanel`/
   `LocationPicker`) was tearing down and re-adding two
-  `document`-level event listeners on *every render* of every
+  `document`-level event listeners on _every render_ of every
   dismissable panel, since the `onClose` callback passed in
   (`() => setIsOpen(false)`) is a fresh closure each time and was a
   direct effect dependency. Fixed by reading `onClose` through a ref
@@ -1371,9 +1371,118 @@ performance fix, and attention-pulse animations. No architecture change
 - The trigger button gets a soft pulsing glow (`framer-motion`
   `boxShadow` keyframe animation, 1.8s loop, respects
   `prefers-reduced-motion`) until the user opens the panel for the
-  first time *this session* — a plain `useState` flag is enough, since
+  first time _this session_ — a plain `useState` flag is enough, since
   `TonightsHighlightsPanel` is always mounted by `App` (its own early
   `return null` in explore mode doesn't unmount it), so the flag
   persists across mode switches and open/close cycles for the whole
   session, resetting only on a real page reload. Closing the panel
   again does not resume the pulse.
+
+## Interaction stabilization pass: the pick-priority mutual-deferral bug
+
+A pure polish/optimization pass — no new features. Fixes a real
+regression the click-priority fix (above) had introduced, adds cursor
+feedback, and removes several confirmed per-frame inefficiencies.
+
+### Root cause: stars and constellation lines mutually deferred to each other
+
+- The previous fix (`hitsAnotherObject`) made stars and constellation
+  lines defer to _any_ other object also hit by the same ray, so a
+  precise DSO/planet/Sun/Moon marker would always win a shared hit.
+  What it missed: constellation lines are drawn **between** named
+  stars, so a line segment's raycast threshold very often also covers
+  the exact position of the star it connects to. When both a star and
+  a line were hit by the same ray, **both** saw "something else was
+  also hit" and **both** deferred — and since neither called
+  `stopPropagation()`, neither ever ran its own hover/click logic
+  either. Net effect: hover highlighting silently stopped working, and
+  clicking a star or constellation line frequently did nothing at all
+  — exactly the reported regression, for exactly the objects most
+  likely to anchor a constellation line (i.e. the brightest, most
+  commonly clicked stars).
+- **Fixed with an actual priority system instead of a binary "anyone
+  else" check.** `scene/picking/interactionPriority.ts` now exports
+  `PICK_PRIORITY = { line: 0, star: 1, precise: 2 }` and
+  `hitsHigherPriorityObject(intersections, self, ownPriority)`, which
+  only defers to a hit of **strictly higher** priority. Every
+  interactive object now tags itself via a plain `userData={{
+  pickPriority: ... }}` prop: `ConstellationFigure` → `line`,
+  `StarsLayer`'s `<points>` → `star`, `DsoMarker`/`PlanetMarker`/
+  `SunMarker`/`MoonMarker`'s clickable mesh → `precise`. This resolves
+  correctly regardless of raycast dispatch order: a star always wins
+  over a line hit at the same point (checked from either side), and a
+  precise marker always wins over both — no more mutual deadlock,
+  because two objects of the _same_ priority never defer to each other.
+- `interactionPriority.test.ts` rewritten to cover the three-way case
+  directly (line/star/precise all hit at once, only the precise object
+  proceeds) plus the specific regression scenario (star does not defer
+  to a line, line does defer to a star).
+
+### Cursor feedback
+
+- **`hooks/useHoverCursor.ts`** (new): sets `document.body.style.cursor
+  = 'pointer'` while `useSceneStore.hoveredObjectId` is non-null, and
+  back to the default otherwise. Subscribed via zustand's vanilla
+  `subscribe()` (not a reactive selector) since hover can change on
+  every pointer move across the sky — a plain DOM style write needs no
+  React re-render to take effect, and using a reactive selector here
+  would reintroduce the exact re-render churn the previous pass fixed.
+  Wired once in `App`.
+
+### Zoom engine: removing confirmed per-frame waste
+
+- **`DsoMarker`** (~500 instances) previously recomputed
+  `revealProgress`, ran the opacity `damp()`, and wrote
+  `material.opacity` **every frame, forever** — even once fully
+  converged and the camera sitting perfectly still. Now tracks the
+  last-seen FOV and a converged flag: the fade only actually recomputes
+  while the FOV is genuinely changing or the opacity hasn't yet
+  settled within `OPACITY_CONVERGED_EPSILON`, and the mesh's scale
+  (used for the selection pulse) is only touched at all while an
+  object is selected, or on the single frame it stops being selected.
+  Visually identical output — this only removes work that was
+  producing the exact same result every frame anyway.
+- **`ConstellationFigure`** (up to 88 instances) previously wrote
+  `material.color` every frame for every constellation, selected or
+  not. Since at most one constellation is ever selected at a time, this
+  now skips the color write entirely for the ~87 unselected ones,
+  except on the single frame each transitions away from selection.
+- `CameraController`'s own per-frame zoom/pan math was reviewed and is
+  already lean (ref-mutations and `damp()` calls only, no allocations,
+  no reactive store subscriptions that would trigger React re-renders)
+  — no changes needed there beyond what the previous pass already did.
+- `PlanetOrbitTrail`, `useThrottledFov`-driven label decluttering, and
+  the star shader's per-frame uniform updates were all re-reviewed and
+  confirmed already correctly memoized/throttled (recomputing only on
+  date change or on throttled FOV-bucket change, never per frame across
+  the full object count) — no further action needed.
+
+### Search navigation: removing a duplicate catalog scan
+
+- `App.tsx`'s `handleSearchSelect` previously scanned the star/DSO
+  catalog **twice** per selection for the same id — once to resolve the
+  fly-to position, once more to check reveal-level visibility. Rewritten
+  to look each result up once and derive both the target position and
+  the required FOV from that single lookup — halves the scan cost for
+  star/DSO search results (the catalog scan is still a one-time,
+  pre-animation cost, never inside the per-frame flight itself, which
+  was already the case).
+
+### Reviewed, no change needed
+
+- **Hit-testing/spatial indexing**: Three.js's `Points`/`Line` raycasting
+  already pre-checks a bounding sphere before testing individual
+  points/segments, and the FOV-scaled thresholds
+  (`fovScaledPointThreshold`/`fovScaledLabelSeparation`) already keep
+  the effective hit-test cost and clickable-area feel consistent across
+  zoom levels. A full custom spatial index (octree/grid) would be a
+  materially larger architecture change for a stabilization pass whose
+  explicit goal is _fewer_ moving parts, not more — not attempted.
+- **Frustum culling for the star field**: the single `Points` buffer
+  spans the full celestial sphere around the always-at-origin camera,
+  so its bounding sphere is never entirely outside the view frustum —
+  Three.js's default per-object culling can't skip it as a whole. This
+  is an inherent property of the GPU-buffer approach Phase 8 chose
+  specifically to avoid CPU-side filtering/geometry rebuilds; WebGL's
+  own hardware clipping already avoids fragment work for off-screen
+  points, which is the cost that actually matters at this scale.

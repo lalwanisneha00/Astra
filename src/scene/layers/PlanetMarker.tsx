@@ -9,6 +9,7 @@ import { usePulseHighlightScale } from '@/hooks/usePulseHighlightScale'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { PlanetOrbitTrail } from '@/scene/layers/PlanetOrbitTrail'
 import { wasDrag } from '@/scene/picking/dragGuard'
+import { PICK_PRIORITY } from '@/scene/picking/interactionPriority'
 import { getPlanetGlowTexture, getPlanetTexture } from '@/scene/textures/planetTexture'
 import { useLayersStore } from '@/state/useLayersStore'
 import { useSceneStore } from '@/state/useSceneStore'
@@ -112,6 +113,7 @@ export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
             />
           </mesh>
           <mesh
+            userData={{ pickPriority: PICK_PRIORITY.precise }}
             onClick={handleClick}
             onPointerOver={handlePointerOver}
             onPointerOut={handlePointerOut}

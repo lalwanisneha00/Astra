@@ -6,6 +6,7 @@ import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { usePulseHighlightScale } from '@/hooks/usePulseHighlightScale'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { wasDrag } from '@/scene/picking/dragGuard'
+import { PICK_PRIORITY } from '@/scene/picking/interactionPriority'
 import { createMoonPhaseTexture } from '@/scene/textures/sunMoonTexture'
 import { useLayersStore } from '@/state/useLayersStore'
 import { useSceneStore } from '@/state/useSceneStore'
@@ -78,6 +79,7 @@ export function MoonMarker({ moon }: MoonMarkerProps) {
       <Billboard position={position}>
         <mesh
           ref={highlightRef}
+          userData={{ pickPriority: PICK_PRIORITY.precise }}
           onClick={handleClick}
           onPointerOver={handlePointerOver}
           onPointerOut={handlePointerOut}

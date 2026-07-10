@@ -6,6 +6,7 @@ import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { usePulseHighlightScale } from '@/hooks/usePulseHighlightScale'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { wasDrag } from '@/scene/picking/dragGuard'
+import { PICK_PRIORITY } from '@/scene/picking/interactionPriority'
 import { getPlanetGlowTexture } from '@/scene/textures/planetTexture'
 import { getSunTexture } from '@/scene/textures/sunMoonTexture'
 import { useLayersStore } from '@/state/useLayersStore'
@@ -82,6 +83,7 @@ export function SunMarker({ sun }: SunMarkerProps) {
             />
           </mesh>
           <mesh
+            userData={{ pickPriority: PICK_PRIORITY.precise }}
             onClick={handleClick}
             onPointerOver={handlePointerOver}
             onPointerOut={handlePointerOut}

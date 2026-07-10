@@ -5,6 +5,7 @@ import { horizontalToEquatorial } from '@/astronomy/horizontal'
 import { useConstellations } from '@/hooks/useConstellations'
 import { useDeepSkyObjects } from '@/hooks/useDeepSkyObjects'
 import { useHorizonCulling } from '@/hooks/useHorizonCulling'
+import { useHoverCursor } from '@/hooks/useHoverCursor'
 import { useMoonPosition } from '@/hooks/useMoonPosition'
 import { usePlanetPositions } from '@/hooks/usePlanetPositions'
 import { useSearchIndex } from '@/hooks/useSearchIndex'
@@ -25,7 +26,7 @@ import { useLocationStore } from '@/state/useLocationStore'
 import { DEFAULT_FOV, useSceneStore } from '@/state/useSceneStore'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import { useTimeStore } from '@/state/useTimeStore'
-import type { ObserverLocation } from '@/types/coordinates'
+import type { EquatorialCoord, ObserverLocation } from '@/types/coordinates'
 import type { SearchResult } from '@/types/search'
 import { LayerToggleDock } from '@/ui/controls/LayerToggleDock'
 import { LocationPicker } from '@/ui/controls/LocationPicker'
@@ -58,6 +59,7 @@ export function App() {
   const clearSelection = useSelectionStore((state) => state.clearSelection)
   const select = useSelectionStore((state) => state.select)
   const [showLocationPicker, setShowLocationPicker] = useState(false)
+  useHoverCursor()
 
   const mode = useTimeStore((state) => state.mode)
   const currentDate = useTimeStore((state) => state.currentDate)
@@ -162,35 +164,37 @@ export function App() {
     (result: SearchResult) => {
       select({ type: result.type, id: result.id })
 
-      const target =
-        result.type === 'star'
-          ? starCatalog.stars.find((star) => star.id === result.id)?.equatorial
-          : result.type === 'constellation'
-            ? constellations.find((c) => c.id === result.id)?.labelPosition
-            : result.type === 'planet'
-              ? planets.find((planet) => planet.id === result.id)?.equatorial
-              : result.type === 'dso'
-                ? deepSkyObjects.find((dso) => dso.id === result.id)?.equatorial
-                : result.type === 'sun'
-                  ? sun.equatorial
-                  : moon.equatorial
-
-      if (!target) return
-
-      const currentFov = useSceneStore.getState().fov
+      // Each catalog is scanned at most once per selection (previously
+      // stars/DSOs were each looked up twice — once for position, once
+      // for the reveal check — a real, avoidable doubling of an O(n)
+      // scan over a catalog with up to ~41,000 entries).
+      let target: EquatorialCoord | undefined
       let requiredFov: number | null = null
+      const currentFov = useSceneStore.getState().fov
 
       if (result.type === 'star') {
         const star = starCatalog.stars.find((s) => s.id === result.id)
+        target = star?.equatorial
         if (star && !isStarRevealed(currentFov, star.magnitude)) {
           requiredFov = fovForStarMagnitude(star.magnitude)
         }
+      } else if (result.type === 'constellation') {
+        target = constellations.find((c) => c.id === result.id)?.labelPosition
+      } else if (result.type === 'planet') {
+        target = planets.find((planet) => planet.id === result.id)?.equatorial
       } else if (result.type === 'dso') {
         const dso = deepSkyObjects.find((d) => d.id === result.id)
+        target = dso?.equatorial
         if (dso && !isDsoRevealed(currentFov, dso)) {
           requiredFov = fovForExplorationLevel(dsoRevealLevel(dso))
         }
+      } else if (result.type === 'sun') {
+        target = sun.equatorial
+      } else {
+        target = moon.equatorial
       }
+
+      if (!target) return
 
       useSceneStore.getState().setFlyToTarget(target)
       if (requiredFov !== null) {

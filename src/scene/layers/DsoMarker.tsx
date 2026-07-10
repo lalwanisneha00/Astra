@@ -9,6 +9,7 @@ import { clamp } from '@/lib/math'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { DSO_CLICKABLE_OPACITY, dsoRevealLevel, revealProgress } from '@/scene/exploration'
 import { wasDrag } from '@/scene/picking/dragGuard'
+import { PICK_PRIORITY } from '@/scene/picking/interactionPriority'
 import { selectionPulseIntensity } from '@/scene/selectionPulse'
 import { getDsoTexture } from '@/scene/textures/dsoTexture'
 import { useLayersStore } from '@/state/useLayersStore'
@@ -26,6 +27,10 @@ const HIGHLIGHT_SCALE = 1.4
 const PULSE_SCALE_BOOST = 0.5
 const HIGHLIGHT_BLEND = 0.4
 const OPACITY_DAMPING = 6
+// Once the damped opacity is this close to its target, snap to the
+// exact value and stop recomputing every frame — see the useFrame
+// comment below for why this matters at ~500 instances.
+const OPACITY_CONVERGED_EPSILON = 0.001
 
 interface DsoMarkerProps {
   dso: DeepSkyObject
@@ -80,6 +85,14 @@ export function DsoMarker({ dso, explorationEnabled }: DsoMarkerProps) {
   // performance work has learned to avoid.
   const wasSelectedRef = useRef(false)
   const selectedAtRef = useRef<number | null>(null)
+  // FOV-change + convergence tracking so the opacity fade only actually
+  // recomputes while it's genuinely mid-transition (the camera is
+  // zooming, or this object hasn't finished fading in/out yet) — at
+  // ~500 objects, redoing this math every single frame forever, even
+  // while the camera sits perfectly still, is exactly the "unnecessary
+  // recalculation" this pass exists to remove.
+  const lastFovRef = useRef<number | null>(null)
+  const opacityConvergedRef = useRef(false)
 
   const color = useMemo(() => {
     const base = new THREE.Color(meta.color)
@@ -93,20 +106,32 @@ export function DsoMarker({ dso, explorationEnabled }: DsoMarkerProps) {
 
   useFrame((state, delta) => {
     const camera = state.camera as THREE.PerspectiveCamera
-    const target = explorationEnabled ? revealProgress(camera.fov, revealLevel) : 1
-    currentOpacityRef.current = damp(currentOpacityRef.current, target, OPACITY_DAMPING, delta)
-    if (materialRef.current) materialRef.current.opacity = currentOpacityRef.current
+    const fov = camera.fov
+    const fovChanged = lastFovRef.current !== fov
+    lastFovRef.current = fov
+
+    if (fovChanged || !opacityConvergedRef.current) {
+      const target = explorationEnabled ? revealProgress(fov, revealLevel) : 1
+      const next = damp(currentOpacityRef.current, target, OPACITY_DAMPING, delta)
+      const converged = Math.abs(next - target) < OPACITY_CONVERGED_EPSILON
+      currentOpacityRef.current = converged ? target : next
+      opacityConvergedRef.current = converged
+      if (materialRef.current) materialRef.current.opacity = currentOpacityRef.current
+    }
 
     if (isSelected && !wasSelectedRef.current) selectedAtRef.current = state.clock.elapsedTime
+    const justDeselected = !isSelected && wasSelectedRef.current
     wasSelectedRef.current = isSelected
-    const pulse =
-      isSelected && selectedAtRef.current !== null
-        ? selectionPulseIntensity(state.clock.elapsedTime - selectedAtRef.current)
-        : 0
 
-    if (meshRef.current) {
-      const scale = isSelected ? HIGHLIGHT_SCALE + pulse * PULSE_SCALE_BOOST : 1
-      meshRef.current.scale.setScalar(scale)
+    if (isSelected) {
+      const pulse =
+        selectedAtRef.current !== null
+          ? selectionPulseIntensity(state.clock.elapsedTime - selectedAtRef.current)
+          : 0
+      if (meshRef.current)
+        meshRef.current.scale.setScalar(HIGHLIGHT_SCALE + pulse * PULSE_SCALE_BOOST)
+    } else if (justDeselected && meshRef.current) {
+      meshRef.current.scale.setScalar(1)
     }
   })
 
@@ -131,6 +156,7 @@ export function DsoMarker({ dso, explorationEnabled }: DsoMarkerProps) {
       <Billboard position={position}>
         <mesh
           ref={meshRef}
+          userData={{ pickPriority: PICK_PRIORITY.precise }}
           onClick={handleClick}
           onPointerOver={handlePointerOver}
           onPointerOut={handlePointerOut}

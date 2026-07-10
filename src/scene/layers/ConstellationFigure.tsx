@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { wasDrag } from '@/scene/picking/dragGuard'
-import { hitsAnotherObject } from '@/scene/picking/interactionPriority'
+import { hitsHigherPriorityObject, PICK_PRIORITY } from '@/scene/picking/interactionPriority'
 import { selectionPulseIntensity } from '@/scene/selectionPulse'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import type { Constellation } from '@/types/constellation'
@@ -35,14 +35,23 @@ export function ConstellationFigure({ constellation }: ConstellationFigureProps)
   const selectedAtRef = useRef<number | null>(null)
 
   useFrame((state) => {
+    if (!materialRef.current) return
+    // Skip entirely once settled and unselected — of up to 88
+    // constellations, at most one is ever selected at a time, so the
+    // other ~87 have no per-frame color work to do at all outside the
+    // single frame they transition away from selection.
+    const selectionChanged = isSelected !== wasSelectedRef.current
     if (isSelected && !wasSelectedRef.current) selectedAtRef.current = state.clock.elapsedTime
     wasSelectedRef.current = isSelected
 
-    if (!materialRef.current) return
-    materialRef.current.color.copy(isSelected ? HIGHLIGHT_COLOR : DIM_COLOR)
-    if (isSelected && selectedAtRef.current !== null) {
-      const pulse = selectionPulseIntensity(state.clock.elapsedTime - selectedAtRef.current)
-      if (pulse > 0) materialRef.current.color.lerp(PULSE_COLOR, pulse)
+    if (isSelected) {
+      materialRef.current.color.copy(HIGHLIGHT_COLOR)
+      if (selectedAtRef.current !== null) {
+        const pulse = selectionPulseIntensity(state.clock.elapsedTime - selectedAtRef.current)
+        if (pulse > 0) materialRef.current.color.lerp(PULSE_COLOR, pulse)
+      }
+    } else if (selectionChanged) {
+      materialRef.current.color.copy(DIM_COLOR)
     }
   })
 
@@ -67,16 +76,18 @@ export function ConstellationFigure({ constellation }: ConstellationFigureProps)
     if (wasDrag()) return
     // See interactionPriority.ts's doc comment: a constellation line
     // passing near a DSO/planet marker (e.g. Orion's sword right next
-    // to M42) can otherwise out-rank and swallow a click meant for that
-    // marker. Defer if this same ray also hit something with its own
-    // handler.
-    if (hitsAnotherObject(event.intersections, event.eventObject)) return
+    // to M42), or right at the star it connects to, can otherwise
+    // out-rank and swallow a click meant for that marker/star. Defers to
+    // anything of strictly higher pick priority (stars, then precise
+    // markers) — never to another constellation line, so this can't
+    // mutually defer with itself.
+    if (hitsHigherPriorityObject(event.intersections, event.eventObject, PICK_PRIORITY.line)) return
     event.stopPropagation()
     select({ type: 'constellation', id: constellation.id })
   }
 
   return (
-    <lineSegments onClick={handleClick}>
+    <lineSegments userData={{ pickPriority: PICK_PRIORITY.line }} onClick={handleClick}>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
