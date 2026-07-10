@@ -100,11 +100,26 @@ export function CameraController() {
     let lastMoveTime = 0
     let pinchLastDistance: number | null = null
     let lastPinchTime = 0
+    let pointerLockRequestedForGesture = false
 
     const handlePointerDown = (event: PointerEvent) => {
       if (event.pointerType === 'mouse' && event.button !== 0) return
       event.preventDefault()
-      canvas.setPointerCapture(event.pointerId)
+      // Best-effort: some browsers (and most synthetic/automated input)
+      // throw InvalidStateError here even for an otherwise-valid pointer.
+      // Capture is purely an enhancement (keeps dragging working if the
+      // cursor leaves the canvas mid-gesture) - every line below this
+      // must still run regardless, or a thrown, uncaught exception here
+      // would silently skip resetDragDistance() and activePointers.set(),
+      // leaving stale drag-distance state that corrupts the *next*
+      // gesture's click-vs-drag detection.
+      try {
+        canvas.setPointerCapture(event.pointerId)
+      } catch {
+        // Ignored - pointermove still reaches canvas as long as the
+        // cursor stays over it, which covers the overwhelming majority
+        // of drags.
+      }
       activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
       velocityRef.current = { yaw: 0, pitch: 0 }
       isFlyingRef.current = false
@@ -118,23 +133,20 @@ export function CameraController() {
         // this is what tells every object's release handler whether the
         // eventual release was a real tap or the tail end of a drag).
         resetDragDistance()
-        // Best-effort: if denied/unsupported, dragging still works via
-        // the absolute-position fallback in handlePointerMove, just
-        // bounded by the screen edge again.
-        if (event.pointerType === 'mouse') {
-          // `unadjustedMovement` opts out of OS-level mouse acceleration
-          // for movementX/Y — Chromium has a long-documented bug where,
-          // without it, an occasional movementX/Y reports a spurious
-          // 300-400px jump during active pointer lock, which would blow
-          // straight through the click-vs-drag threshold for what was
-          // really a stationary click. Falls back to a plain lock
-          // request if the option itself isn't supported (older
-          // browsers reject the whole request rather than ignoring an
-          // unknown option).
-          canvas.requestPointerLock?.({ unadjustedMovement: true })?.catch(() => {
-            canvas.requestPointerLock?.()?.catch(() => {})
-          })
-        }
+        // Pointer lock itself is requested lazily, from the first real
+        // move of this gesture (see handlePointerMove) rather than here
+        // on every mousedown — requesting it eagerly for what might just
+        // be a plain click raced against the browser's own (asynchronous,
+        // sometimes 30ms+) grant latency: a fast click's `pointerup` could
+        // fire `exitPointerLock()` *before* a lock requested on the
+        // preceding `pointerdown` had actually been granted, leaving the
+        // grant land moments later with nothing left to exit it — a
+        // orphaned, stuck lock that then silently froze every subsequent
+        // click's `clientX`/`clientY` at wherever the lock engaged,
+        // exactly matching "the same object gets selected no matter where
+        // I click" reports. A real drag still requests lock within a
+        // frame or two of starting, imperceptibly later than before.
+        pointerLockRequestedForGesture = false
       } else if (activePointers.size === 2) {
         isDraggingRef.current = false
         const [a, b] = [...activePointers.values()]
@@ -176,6 +188,24 @@ export function CameraController() {
       }
 
       if (!isDraggingRef.current) return
+
+      if (event.pointerType === 'mouse' && !pointerLockRequestedForGesture) {
+        pointerLockRequestedForGesture = true
+        // `unadjustedMovement` opts out of OS-level mouse acceleration
+        // for movementX/Y — Chromium has a long-documented bug where,
+        // without it, an occasional movementX/Y reports a spurious
+        // 300-400px jump during active pointer lock, which would blow
+        // straight through the click-vs-drag threshold for what was
+        // really a stationary drag continuation. Falls back to a plain
+        // lock request if the option itself isn't supported (older
+        // browsers reject the whole request rather than ignoring an
+        // unknown option). Best-effort: if denied/unsupported, dragging
+        // still works via the absolute-position fallback below, just
+        // bounded by the screen edge again.
+        canvas.requestPointerLock?.({ unadjustedMovement: true })?.catch(() => {
+          canvas.requestPointerLock?.()?.catch(() => {})
+        })
+      }
 
       const isPointerLocked = document.pointerLockElement === canvas
       let dx: number

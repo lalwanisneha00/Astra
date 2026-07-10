@@ -1649,7 +1649,7 @@ raycast-priority reasoning. Two structural problems fell out of that:
 
 - **Raycast distance is biased for points and lines.** `Points.raycast`
   and `Line.raycast` report `distance` as the distance to the closest
-  point *on the ray itself* to the vertex, not the vertex's true
+  point _on the ray itself_ to the vertex, not the vertex's true
   position — so a star or constellation line under the cursor could
   report a smaller "distance" than a mesh marker that's actually
   closer to where the user is really pointing. The previous fix for
@@ -1658,7 +1658,7 @@ raycast-priority reasoning. Two structural problems fell out of that:
   rules, and itself once caused a mutual-deferral deadlock between two
   tiers.
 - **No single authority decided the winner.** With every layer
-  independently deciding whether *it* should claim a given pointer
+  independently deciding whether _it_ should claim a given pointer
   event, "click one constellation, select a different one" and similar
   cross-object bugs were a matter of whatever order Three.js happened
   to dispatch events in for a given frame — not a deterministic rule.
@@ -1700,7 +1700,7 @@ between the camera ray and the candidate's own true direction**
 reported (and, for points/lines, biased) `distance`. Since the camera
 always sits at the scene origin and every object (stars, DSOs, planets,
 Sun, Moon, constellation lines) sits on the same-radius celestial
-sphere, angular separation from the ray *is* the correct, unbiased
+sphere, angular separation from the ray _is_ the correct, unbiased
 "how close is the cursor to this object" measure, computed identically
 for every object type. Smallest angle wins; a tiny epsilon
 (`TIE_EPSILON_RAD`) breaks true ties (overlapping star and constellation
@@ -1755,3 +1755,90 @@ Deleted: `src/scene/picking/interactionPriority.ts` and its test (the
 old tier-defer system, fully superseded by `pick.ts`).
 Unchanged, verified via `git diff`: `src/scene/picking/dragGuard.ts`,
 `dragGuard.test.ts`, `src/scene/camera/CameraController.tsx`.
+
+## The real click/hover bug: two uncaught, racing browser API calls in CameraController
+
+After the Interaction Manager rebuild above, hover/click still misbehaved
+inconsistently: only stars and constellations reliably highlighted, and
+clicks would sometimes leave the *previous* selection in place no matter
+where the next click landed. Rather than guess again, this was diagnosed
+with a headless Playwright instance driven against the real dev server
+(`page.on('pageerror', ...)` plus a temporary debug hook exposing the
+Zustand stores on `window`), scripting hundreds of synthetic hover/click
+events across the canvas and reading the actual store state after each
+one. That surfaced two concrete, unrelated bugs, both in
+`CameraController.tsx` — nothing wrong with the Interaction Manager,
+`pick.ts`, or the registry at all.
+
+### Bug 1: an uncaught `setPointerCapture` exception on every pointerdown
+
+`handlePointerDown` called `canvas.setPointerCapture(event.pointerId)`
+completely unguarded. In the Playwright reproduction this threw
+`InvalidStateError` on **every single pointerdown** — an uncaught
+exception that aborted the rest of the handler immediately, meaning
+`activePointers.set(...)` and `resetDragDistance()` (both *after* the
+capture call) silently never ran. Since `resetDragDistance()` is what
+tells the next gesture's release that no leftover distance from a prior
+gesture applies, skipping it left `dragGuard`'s accumulated net
+displacement stale across gestures — corrupting `wasDrag()` for the
+*next* click and causing `InteractionManager`'s `pointerup` handler to
+bail out (`if (wasDrag()) return`) without ever calling `select()`,
+leaving whatever was previously selected untouched. Hover was unaffected
+(it only depends on `pointermove`, never touches this code path), which
+is exactly why stars/constellations — hovered far more often simply by
+occupying more of the screen — looked fine while precise, rarely-hit
+mesh markers (planets/Sun/Moon/DSOs) seemed to never highlight: hover
+*did* work for them too, just far less frequently sampled in casual
+testing.
+
+**Fixed** by wrapping only the capture call in `try`/`catch` (capture is
+explicitly a best-effort enhancement — dragging still works via the
+absolute-position fallback without it) so every line after it — the
+pointer bookkeeping and `resetDragDistance()` — always runs regardless
+of whether the browser grants capture.
+
+### Bug 2: eager `requestPointerLock()` on every mousedown raced its own grant latency
+
+`requestPointerLock()` was requested synchronously inside every
+`pointerdown`, including for what turns out to be a plain click (no
+drag at all). Pointer lock grants are **asynchronous** — measured at up
+to ~30ms in the Playwright environment, plausibly longer under real
+system load — while `pointerup`'s `exitPointerLock()` call is a
+synchronous, one-shot check (`if (document.pointerLockElement ===
+canvas) exitPointerLock()`). A fast click's `pointerup` can fire
+*before* the lock requested on the preceding `pointerdown` has actually
+been granted: the exit check finds nothing locked yet (no-op), and the
+grant then lands moments later with nothing left to release it. The
+result is an **orphaned, stuck pointer lock** that persists into every
+subsequent interaction. While genuinely locked, the browser hides the
+real cursor and stops updating `clientX`/`clientY` on further pointer
+events (only `movementX`/`movementY` carries real delta information) —
+but `InteractionManager` always reads `event.clientX`/`clientY`, never
+`movementX`/`movementY`. With the lock stuck on, every subsequent click
+resolved to whatever screen position the lock happened to engage at,
+regardless of where the cursor visually was — precisely "the same
+object gets selected no matter where I click."
+
+Reproduced directly: a scripted click-move-click sequence showed
+`document.pointerLockElement` flip to `true` immediately after a
+`pointerup` that was supposed to have exited it, and every following
+click failed to update the selection until a later, larger cursor jump
+happened to coincide with the lock's actual (delayed) release.
+
+**Fixed** by requesting pointer lock **lazily**, from inside
+`handlePointerMove` the first time a gesture that's already past the
+"this is dragging" check actually moves — never from `pointerdown`
+itself. A plain click (down immediately followed by up, no intervening
+move) now never requests pointer lock at all, so the entire race is
+structurally impossible for clicks; a real drag still requests lock
+within the first frame or two of movement, imperceptibly later than
+before. Verified with a rapid click sequence across constellations,
+stars, planets, the Sun, and DSOs with zero remaining stuck selections
+and zero page errors (the only remaining "stuck" cases traced to test
+clicks landing on the already-open info panel's own screen region,
+correctly intercepting the click before it reaches the canvas — expected
+UI behavior, not a picking bug).
+
+Both fixes are narrowly scoped to *when*/*whether* two browser APIs are
+called in `CameraController.tsx`; `dragGuard.ts`'s distance-threshold
+math and net-displacement accumulation are untouched.
