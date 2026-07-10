@@ -1,20 +1,19 @@
 import { Billboard, Html } from '@react-three/drei'
-import { type ThreeEvent } from '@react-three/fiber'
 import { useMemo } from 'react'
 import type * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { usePulseHighlightScale } from '@/hooks/usePulseHighlightScale'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
-import { wasDrag } from '@/scene/picking/dragGuard'
-import { PICK_PRIORITY } from '@/scene/picking/interactionPriority'
+import { usePickable } from '@/scene/interaction/usePickable'
 import { createMoonPhaseTexture } from '@/scene/textures/sunMoonTexture'
+import { useInteractionStore } from '@/state/useInteractionStore'
 import { useLayersStore } from '@/state/useLayersStore'
-import { useSceneStore } from '@/state/useSceneStore'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import type { MoonPosition } from '@/types/sunMoon'
 
 const MARKER_SIZE = 4
 const HIGHLIGHT_SCALE = 1.3
+const HOVER_SCALE = 1.12
 // Extra scale at the instant of selection, decaying away — see
 // scene/selectionPulse.ts.
 const PULSE_SCALE_BOOST = 0.5
@@ -27,17 +26,24 @@ interface MoonMarkerProps {
   moon: MoonPosition
 }
 
-/** The Moon's own billboarded sprite, textured with a phase-accurate
+/**
+ * The Moon's own billboarded sprite, textured with a phase-accurate
  * disc (see scene/textures/sunMoonTexture.ts) that's regenerated — not
  * cached like other sprites — whenever the phase changes meaningfully,
  * since unlike every other marker in this app, the Moon's own
- * appearance genuinely changes from night to night. */
+ * appearance genuinely changes from night to night.
+ *
+ * Hover and click detection are *not* implemented here — this component
+ * only renders the marker and declares it pick-able (`usePickable`
+ * below); `scene/interaction/InteractionManager` owns all hit-testing.
+ */
 export function MoonMarker({ moon }: MoonMarkerProps) {
   const isSelected = useSelectionStore(
     (state) => state.selection?.type === 'moon' && state.selection.id === 'moon',
   )
-  const select = useSelectionStore((state) => state.select)
-  const setHoveredObjectId = useSceneStore((state) => state.setHoveredObjectId)
+  const isHovered = useInteractionStore(
+    (state) => state.hovered?.type === 'moon' && state.hovered.id === 'moon',
+  )
   const showLabels = useLayersStore((state) => state.labels)
 
   const roundedIllumination = Math.round(moon.illumination / ILLUMINATION_STEP) * ILLUMINATION_STEP
@@ -57,38 +63,19 @@ export function MoonMarker({ moon }: MoonMarkerProps) {
     isSelected,
     HIGHLIGHT_SCALE,
     PULSE_SCALE_BOOST,
+    isHovered,
+    HOVER_SCALE,
   )
 
-  // A release, not `onClick` — see StarsLayer's detailed comment on why
-  // react-three-fiber's own `onClick` unreliably drops clicks in a scene
-  // with continuous camera easing between pointerdown and the click
-  // event.
-  function handlePointerUp(event: ThreeEvent<PointerEvent>) {
-    if (event.pointerType === 'mouse' && event.button !== 0) return
-    if (wasDrag()) return
-    event.stopPropagation()
-    select({ type: 'moon', id: 'moon' })
-  }
-
-  function handlePointerOver(event: ThreeEvent<PointerEvent>) {
-    event.stopPropagation()
-    setHoveredObjectId('moon')
-  }
-
-  function handlePointerOut() {
-    setHoveredObjectId(null)
-  }
+  usePickable(highlightRef, 'moon', (_index, point) => ({
+    id: 'moon',
+    direction: point.clone().normalize(),
+  }))
 
   return (
     <group>
       <Billboard position={position}>
-        <mesh
-          ref={highlightRef}
-          userData={{ pickPriority: PICK_PRIORITY.precise }}
-          onPointerUp={handlePointerUp}
-          onPointerOver={handlePointerOver}
-          onPointerOut={handlePointerOut}
-        >
+        <mesh ref={highlightRef}>
           <planeGeometry args={[MARKER_SIZE, MARKER_SIZE]} />
           <meshBasicMaterial map={texture} transparent depthWrite={false} />
         </mesh>

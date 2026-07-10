@@ -6,6 +6,7 @@ import { ConstellationLayer } from '@/scene/layers/ConstellationLayer'
 import { DeepSkyLayer } from '@/scene/layers/DeepSkyLayer'
 import { GridLayer } from '@/scene/layers/GridLayer'
 import { HorizonLayer } from '@/scene/layers/HorizonLayer'
+import { InteractionManager } from '@/scene/interaction/InteractionManager'
 import { LabelsLayer } from '@/scene/layers/LabelsLayer'
 import { MoonMarker } from '@/scene/layers/MoonMarker'
 import { PlanetsLayer } from '@/scene/layers/PlanetsLayer'
@@ -64,6 +65,7 @@ export function SceneCanvas({
     >
       <color attach="background" args={[BACKGROUND_COLOR]} />
       <CameraController />
+      <InteractionManager />
       {/* Rendered before StarsLayer so bright star points sit visually on
           top of the dimmer connecting lines/grids. */}
       <GridLayer observer={observer} date={date} />

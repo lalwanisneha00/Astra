@@ -1628,3 +1628,130 @@ acceleration, the documented mitigation), falling back to a plain
 (handled the same `.catch()`-and-continue way lock failures always
 were — dragging still works via the absolute-position fallback either
 way).
+
+## Hover/click rebuild: a dedicated Interaction Manager
+
+Despite the two fixes above (the r3f `onClick` gate, and the
+path-length-vs-net-displacement drag bug), hover/click reliability
+kept regressing. Rather than attempt a fourth incremental patch, the
+whole hover-detection and click-detection system was deleted and
+rebuilt from scratch as a single, centralized module — while
+deliberately leaving `dragGuard.ts` and `CameraController.tsx`'s drag
+detection **completely untouched** (verified via `git diff` against
+this commit's parent showing zero changes to either file).
+
+### Why the old approach kept regressing
+
+Every render layer (`StarsLayer`, `ConstellationFigure`, `DsoMarker`,
+the planet/Sun/Moon markers) previously owned its own r3f
+`onPointerMove`/`onPointerOut`/`onPointerUp` handlers and did its own
+raycast-priority reasoning. Two structural problems fell out of that:
+
+- **Raycast distance is biased for points and lines.** `Points.raycast`
+  and `Line.raycast` report `distance` as the distance to the closest
+  point *on the ray itself* to the vertex, not the vertex's true
+  position — so a star or constellation line under the cursor could
+  report a smaller "distance" than a mesh marker that's actually
+  closer to where the user is really pointing. The previous fix for
+  this (`PICK_PRIORITY` / `hitsHigherPriorityObject`, a tier-based
+  defer system) just patched around the bias with ad hoc ordering
+  rules, and itself once caused a mutual-deferral deadlock between two
+  tiers.
+- **No single authority decided the winner.** With every layer
+  independently deciding whether *it* should claim a given pointer
+  event, "click one constellation, select a different one" and similar
+  cross-object bugs were a matter of whatever order Three.js happened
+  to dispatch events in for a given frame — not a deterministic rule.
+
+### The new architecture
+
+A single `InteractionManager` (`src/scene/interaction/InteractionManager.tsx`)
+is now the **only** code that raycasts, tracks hover, or triggers
+selection. It takes no props, mounts once inside `<Canvas>`
+(`SceneCanvas.tsx`), and owns its own `THREE.Raycaster` plus native
+`pointermove`/`pointerleave`/`pointerup` listeners on `gl.domElement` —
+independent of `CameraController` (camera/zoom), the render layers, and
+`SearchBar`, exactly as required.
+
+Render layers no longer do any hit-testing themselves. They only
+**declare** that they're pickable, via a small registry:
+
+- `src/scene/interaction/pickableRegistry.ts` — a module-level
+  `Map<Object3D, PickableEntry>`. A `PickableEntry` is just a `type`
+  (`star`/`constellation`/`planet`/`sun`/`moon`/`dso`) and a `resolve`
+  function that turns a raw hit (vertex index, hit point) into a
+  `{ id, direction }` or `null` (e.g. a star below the magnitude
+  cutoff, or a DSO still faded out by the exploration reveal, resolves
+  to `null` — correctly unpickable).
+- `src/scene/interaction/usePickable.ts` — the hook every layer calls
+  once: `usePickable(objectRef, type, resolve)`. Registration only
+  re-runs when the ref/type change (effectively once, at mount); the
+  `resolve` closure itself is captured through a ref so it can freely
+  read the caller's latest props/state without re-registering every
+  render — the same "ref updated via a dependency-less `useEffect`"
+  pattern `useDismissablePanel.ts` already used for `onCloseRef`.
+
+### Picking: true angular distance instead of raycast distance or priority tiers
+
+`src/scene/interaction/pick.ts` replaces the whole `PICK_PRIORITY`
+system with one rule: every candidate hit is compared by the **angle
+between the camera ray and the candidate's own true direction**
+(`rayDirection.angleTo(candidateDirection)`), not by the raycaster's
+reported (and, for points/lines, biased) `distance`. Since the camera
+always sits at the scene origin and every object (stars, DSOs, planets,
+Sun, Moon, constellation lines) sits on the same-radius celestial
+sphere, angular separation from the ray *is* the correct, unbiased
+"how close is the cursor to this object" measure, computed identically
+for every object type. Smallest angle wins; a tiny epsilon
+(`TIE_EPSILON_RAD`) breaks true ties (overlapping star and constellation
+line, say) in favor of the more specific object type (DSO/planet/Sun/
+Moon > star > constellation line). This is architectural, not a
+priority list to maintain — it directly satisfies "the user should
+never click one constellation and have another become selected" and
+"prevent neighboring objects from accidental selection," and is covered
+by 9 unit tests in `pick.test.ts` (nearest-wins regardless of input
+order, closer-but-less-specific beats farther-but-more-specific, exact
+ties resolved by specificity, mixed multi-type scenes).
+
+### Hover state: its own store
+
+Hover now lives in a new `useInteractionStore` (`hovered: HoveredObject
+| null`), deliberately separate from `useSceneStore` (camera/FOV) and
+`useSelectionStore` (click-committed selection) — matching the "hover
+detection is independent from rendering/camera/zoom" requirement.
+`useSceneStore`'s old `hoveredObjectId` field (dead weight predating
+this rebuild) was removed. Every layer reads its own hover flag via a
+narrow selector (`state.hovered?.type === 'dso' && state.hovered.id ===
+dso.id`) and reacts locally: stars re-drive their existing
+`uHoveredIndex` shader uniform, constellation lines gained a new
+brighter hover color/opacity, and the DSO/planet/Sun/Moon markers scale
+up slightly and blend toward white — all via each layer's existing
+per-frame update path, no extra render layer added. `useHoverCursor.ts`
+now flips `document.body`'s CSS cursor by subscribing to "is anything
+hovered" (a boolean), not object identity, since the manager allocates
+a fresh hover object on every pointermove.
+
+### Click vs. drag: unchanged drag, read-only coupling
+
+`InteractionManager`'s `pointerup` handler calls the pre-existing,
+untouched `wasDrag()` from `dragGuard.ts` and only proceeds to pick +
+select if it returns `false` — the manager never calls
+`resetDragDistance`/`addDragDistance`/`markMultiTouchGesture` itself,
+so it cannot influence drag detection, only observe its outcome. This
+is the literal implementation of "the click system adapts around the
+existing drag implementation" rather than the other way around.
+
+### One implementation, both modes
+
+Because `InteractionManager` mounts once at the `Canvas` root and reads
+from the same registry regardless of which layers happen to be
+mounted, Explore Mode and Today's Night Sky automatically get identical
+hover/click behavior — there is no mode-specific branch anywhere in the
+interaction code. `PlanetsLayer` already pre-filters by horizon before
+mounting a `PlanetMarker` in observer mode, so a mounted marker's
+`resolve()` never needs its own redundant horizon check.
+
+Deleted: `src/scene/picking/interactionPriority.ts` and its test (the
+old tier-defer system, fully superseded by `pick.ts`).
+Unchanged, verified via `git diff`: `src/scene/picking/dragGuard.ts`,
+`dragGuard.test.ts`, `src/scene/camera/CameraController.tsx`.

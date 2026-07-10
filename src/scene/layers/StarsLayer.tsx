@@ -1,24 +1,16 @@
-import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { StarCatalog } from '@/hooks/useStarCatalog'
 import { prefersReducedMotion } from '@/lib/motion'
 import { MAGNITUDE_FADE_WIDTH, starMagnitudeCutoff } from '@/scene/exploration'
-import { wasDrag } from '@/scene/picking/dragGuard'
-import { hitsHigherPriorityObject, PICK_PRIORITY } from '@/scene/picking/interactionPriority'
-import { fovScaledPointThreshold } from '@/scene/picking/pointThreshold'
+import { usePickable } from '@/scene/interaction/usePickable'
 import { selectionPulseIntensity } from '@/scene/selectionPulse'
 import fragmentShader from '@/scene/shaders/starField.frag.glsl?raw'
 import vertexShader from '@/scene/shaders/starField.vert.glsl?raw'
-import { useSceneStore } from '@/state/useSceneStore'
+import { useInteractionStore } from '@/state/useInteractionStore'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import type { Star } from '@/types/star'
-
-// Tuned for the catalog's typical star spacing at SPHERE_RADIUS=150 (see
-// useStarCatalog); scaled by FOV each frame so the clickable radius around
-// a star stays roughly constant on screen regardless of zoom.
-const BASE_POINT_THRESHOLD = 2
-const BASE_FOV = 75
 
 interface StarsLayerProps {
   catalog: StarCatalog
@@ -42,15 +34,25 @@ interface StarsLayerProps {
   explorationEnabled: boolean
 }
 
-/** Catalog is loaded once in App.tsx and passed down, so the same loaded
+/**
+ * Catalog is loaded once in App.tsx and passed down, so the same loaded
  * data can also be looked up by StarPanel outside the canvas — see
- * ARCHITECTURE.md's "Star selection" note. */
+ * ARCHITECTURE.md's "Star selection" note.
+ *
+ * Hover and click detection are *not* implemented here — this component
+ * only renders the star field and declares it pick-able (`usePickable`
+ * below); `scene/interaction/InteractionManager` owns all hit-testing
+ * and hover/selection state. This file only ever *reads* that state
+ * back (`useInteractionStore`/`useSelectionStore`) to drive the shader
+ * uniforms that actually highlight a star.
+ */
 export function StarsLayer({
   catalog,
   horizonCullingEnabled,
   altitudes,
   explorationEnabled,
 }: StarsLayerProps) {
+  const pointsRef = useRef<THREE.Points>(null)
   const materialRef = useRef<THREE.ShaderMaterial>(null)
   const altitudeAttributeRef = useRef<THREE.BufferAttribute>(null)
   const dpr = useThree((state) => state.viewport.dpr)
@@ -58,19 +60,30 @@ export function StarsLayer({
   const { buffers, stars } = catalog
   const { positions, sizes, phases, colors, indices, magnitudes, count } = buffers
 
-  const hoveredIndexRef = useRef(-1)
   const starsRef = useRef<Star[]>(stars)
   useEffect(() => {
     starsRef.current = stars
   }, [stars])
 
-  // The selected star's index (or -1) plus when it was selected, for the
-  // brief "just selected" pulse (see scene/selectionPulse.ts) — same
-  // highlight-on-selection treatment every other object type gets.
-  // Looked up only when the selection itself changes (a rare, user-driven
-  // event), never per-frame — an O(n) scan every frame across a catalog
-  // this size would be the exact kind of per-frame cost this app has
-  // learned to avoid (see ARCHITECTURE.md's Phase 8 note).
+  // The hovered/selected star's index (or -1) plus when it was
+  // selected, for the shader's highlight + brief "just selected" pulse
+  // (see scene/selectionPulse.ts). Looked up only when the hover/
+  // selection *changes* (both driven by reactive store selectors, not
+  // per-frame polling), then read imperatively in useFrame below — an
+  // O(n) scan every frame across a catalog this size would be the exact
+  // kind of per-frame cost this app has learned to avoid (see
+  // ARCHITECTURE.md's Phase 8 note). Hover specifically never needs an
+  // O(n) scan at all: InteractionManager's own raycast hit already
+  // knows the buffer index directly (see useInteractionStore's
+  // HoveredObject.index doc comment).
+  const hoveredStarIndexFromStore = useInteractionStore((state) =>
+    state.hovered?.type === 'star' ? (state.hovered.index ?? -1) : -1,
+  )
+  const hoveredStarIndexRef = useRef(-1)
+  useEffect(() => {
+    hoveredStarIndexRef.current = hoveredStarIndexFromStore
+  }, [hoveredStarIndexFromStore])
+
   const selectedStarIndexRef = useRef(-1)
   const selectedAtRef = useRef<number | null>(null)
   const selectedStarId = useSelectionStore((state) =>
@@ -91,9 +104,9 @@ export function StarsLayer({
     altitudesRef.current = altitudes
   }, [altitudes])
 
-  // Updated every frame in useFrame below — read imperatively by
-  // isRevealed rather than as a React dependency, matching this file's
-  // existing altitude-culling pattern.
+  // Updated every frame in useFrame below — read imperatively by the
+  // pick resolver rather than as a React dependency, matching this
+  // file's existing altitude-culling pattern.
   const magnitudeCutoffRef = useRef(Infinity)
 
   // Stable across altitude recomputes — only a new array when the star
@@ -143,6 +156,9 @@ export function StarsLayer({
     if (explorationUniform) explorationUniform.value = explorationEnabled ? 1 : 0
     if (cutoffUniform) cutoffUniform.value = cutoff
 
+    const hoveredIndexUniform = uniforms?.uHoveredIndex
+    if (hoveredIndexUniform) hoveredIndexUniform.value = hoveredStarIndexRef.current
+
     const selectedIndexUniform = uniforms?.uSelectedIndex
     const selectionPulseUniform = uniforms?.uSelectionPulse
     if (selectedIndexUniform) selectedIndexUniform.value = selectedStarIndexRef.current
@@ -152,109 +168,43 @@ export function StarsLayer({
           ? selectionPulseIntensity(performance.now() / 1000 - selectedAtRef.current)
           : 0
     }
-
-    state.raycaster.params.Points.threshold = fovScaledPointThreshold(
-      camera.fov,
-      BASE_POINT_THRESHOLD,
-      BASE_FOV,
-    )
   })
 
-  const isCulled = useCallback(
-    (index: number) => {
-      if (horizonCullingEnabled) {
-        const altitude = altitudesRef.current?.[index]
-        if (altitude !== undefined && altitude < 0) return true
-      }
-      // Mirrors the shader's own fully-invisible threshold (magnitude
-      // cutoff plus the fade band) — a star that's still fading in
-      // remains clickable, one that's fully hidden shouldn't be.
-      const magnitude = magnitudes[index]
-      if (
-        magnitude !== undefined &&
-        magnitude > magnitudeCutoffRef.current + MAGNITUDE_FADE_WIDTH
-      ) {
-        return true
-      }
-      return false
-    },
-    [horizonCullingEnabled, magnitudes],
-  )
+  usePickable(pointsRef, 'star', (index) => {
+    if (index === undefined) return null
+    const star = starsRef.current[index]
+    if (!star) return null
 
-  const setHoveredIndex = useCallback((index: number) => {
-    if (hoveredIndexRef.current === index) return
-    hoveredIndexRef.current = index
+    if (horizonCullingEnabled) {
+      const altitude = altitudesRef.current?.[index]
+      if (altitude !== undefined && altitude < 0) return null
+    }
+    // Mirrors the shader's own fully-invisible threshold (magnitude
+    // cutoff plus the fade band) — a star that's still fading in
+    // remains pick-able, one that's fully hidden shouldn't be.
+    const magnitude = magnitudes[index]
+    if (magnitude !== undefined && magnitude > magnitudeCutoffRef.current + MAGNITUDE_FADE_WIDTH) {
+      return null
+    }
 
-    const uniform = materialRef.current?.uniforms.uHoveredIndex
-    if (uniform) uniform.value = index
+    // The star's own true position — deliberately *not* the raycast
+    // hit's own (approximate) point, which is only the closest point on
+    // the ray to this star, not the star itself. Using the real
+    // position is what lets InteractionManager fairly compare this
+    // against precisely-hit mesh markers.
+    const direction = new THREE.Vector3(
+      positions[index * 3] ?? 0,
+      positions[index * 3 + 1] ?? 0,
+      positions[index * 3 + 2] ?? 0,
+    ).normalize()
 
-    const star = index >= 0 ? (starsRef.current[index] ?? null) : null
-    useSceneStore.getState().setHoveredObjectId(star?.id ?? null)
-  }, [])
-
-  const handlePointerMove = useCallback(
-    (event: ThreeEvent<PointerEvent>) => {
-      // See interactionPriority.ts: a star's threshold-based hit can
-      // out-rank a precisely-clicked DSO/planet/Sun/Moon marker at the
-      // same radius, so defer to it rather than showing a star hover
-      // highlight over what's actually a different object. Only defers
-      // to *higher*-priority objects (not constellation lines, which are
-      // lower priority) — otherwise a star anchoring a constellation
-      // line would mutually defer with that line and neither would ever
-      // show hover feedback.
-      if (hitsHigherPriorityObject(event.intersections, event.eventObject, PICK_PRIORITY.star)) {
-        setHoveredIndex(-1)
-        return
-      }
-      event.stopPropagation()
-      const index = event.index ?? -1
-      setHoveredIndex(index >= 0 && isCulled(index) ? -1 : index)
-    },
-    [setHoveredIndex, isCulled],
-  )
-
-  const handlePointerOut = useCallback(() => {
-    setHoveredIndex(-1)
-  }, [setHoveredIndex])
-
-  // A release, not `onClick`: react-three-fiber only calls `onClick` if
-  // the object was *also* hit at the preceding `pointerdown` (its own
-  // internal `initialHits` gate) — but this app's camera keeps easing
-  // (zoom momentum, fly-to, twinkle) between pointerdown and the click
-  // event, so the raycast can legitimately land on a different star (or
-  // none at all) a frame or two later even though the user never moved
-  // the pointer. `onPointerUp` has no such gate — it always reflects the
-  // raycast at release time — so it's the reliable way to detect "the
-  // user tapped this star," with `wasDrag()` still doing the real
-  // click-vs-drag distinction.
-  const handlePointerUp = useCallback(
-    (event: ThreeEvent<PointerEvent>) => {
-      if (event.pointerType === 'mouse' && event.button !== 0) return
-      if (wasDrag()) return
-      // See interactionPriority.ts's doc comment for why this check is
-      // necessary: without it, a star can silently swallow a click
-      // meant for a DSO/planet/Sun/Moon marker sitting at the same
-      // on-screen position.
-      if (hitsHigherPriorityObject(event.intersections, event.eventObject, PICK_PRIORITY.star))
-        return
-      event.stopPropagation()
-      if (event.index === undefined || isCulled(event.index)) return
-      const star = starsRef.current[event.index]
-      if (!star) return
-      useSelectionStore.getState().select({ type: 'star', id: star.id })
-    },
-    [isCulled],
-  )
+    return { id: star.id, direction, index }
+  })
 
   if (count === 0) return null
 
   return (
-    <points
-      userData={{ pickPriority: PICK_PRIORITY.star }}
-      onPointerMove={handlePointerMove}
-      onPointerOut={handlePointerOut}
-      onPointerUp={handlePointerUp}
-    >
+    <points ref={pointsRef}>
       {/* Keyed on count: only changes when a new tier finishes loading,
           not on every horizon recompute (altitude is a separate,
           in-place-updated attribute, not part of what determines count

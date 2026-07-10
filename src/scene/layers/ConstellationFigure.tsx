@@ -1,48 +1,68 @@
-import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
-import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
-import { wasDrag } from '@/scene/picking/dragGuard'
-import { hitsHigherPriorityObject, PICK_PRIORITY } from '@/scene/picking/interactionPriority'
+import { usePickable } from '@/scene/interaction/usePickable'
 import { selectionPulseIntensity } from '@/scene/selectionPulse'
+import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
+import { useInteractionStore } from '@/state/useInteractionStore'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import type { Constellation } from '@/types/constellation'
 
 const DIM_COLOR = new THREE.Color('#4a5a80')
+const HOVER_COLOR = new THREE.Color('#6f8cc9')
 const HIGHLIGHT_COLOR = new THREE.Color('#8ab4ff')
 // The brief "just selected" flash color the highlight pulses toward —
 // see scene/selectionPulse.ts.
 const PULSE_COLOR = new THREE.Color('#ffffff')
 
+const DIM_OPACITY = 0.35
+const HOVER_OPACITY = 0.6
+const SELECTED_OPACITY = 0.95
+
 interface ConstellationFigureProps {
   constellation: Constellation
 }
 
-/** One constellation's line figure — its own small LineSegments object
+/**
+ * One constellation's line figure — its own small LineSegments object
  * (88 of these total is trivial for the GPU) so each can independently
- * react to selection and be raycast-picked on its own. */
+ * react to hover/selection and be pick-tested on its own.
+ *
+ * Hover and click detection are *not* implemented here — this component
+ * only renders the figure and declares it pick-able (`usePickable`
+ * below); `scene/interaction/InteractionManager` owns all hit-testing.
+ */
 export function ConstellationFigure({ constellation }: ConstellationFigureProps) {
   const isSelected = useSelectionStore(
     (state) => state.selection?.type === 'constellation' && state.selection.id === constellation.id,
   )
-  const select = useSelectionStore((state) => state.select)
+  const isHovered = useInteractionStore(
+    (state) => state.hovered?.type === 'constellation' && state.hovered.id === constellation.id,
+  )
+  const lineRef = useRef<THREE.LineSegments>(null)
   const materialRef = useRef<THREE.LineBasicMaterial>(null)
   // Tracked inline (rather than via the shared useSelectionPulse hook)
   // to keep this at one useFrame subscription per figure, not two — see
   // DsoMarker's identical reasoning.
   const wasSelectedRef = useRef(false)
+  const wasHoveredRef = useRef(false)
   const selectedAtRef = useRef<number | null>(null)
 
   useFrame((state) => {
     if (!materialRef.current) return
-    // Skip entirely once settled and unselected — of up to 88
-    // constellations, at most one is ever selected at a time, so the
-    // other ~87 have no per-frame color work to do at all outside the
-    // single frame they transition away from selection.
-    const selectionChanged = isSelected !== wasSelectedRef.current
+
+    const stateChanged =
+      isSelected !== wasSelectedRef.current || isHovered !== wasHoveredRef.current
     if (isSelected && !wasSelectedRef.current) selectedAtRef.current = state.clock.elapsedTime
     wasSelectedRef.current = isSelected
+    wasHoveredRef.current = isHovered
+
+    // Skip entirely once settled, unhovered, and unselected — of up to
+    // 88 constellations, only a handful are ever hovered/selected at
+    // once, so the rest have no per-frame color work to do at all
+    // outside the single frame they transition away from either state.
+    if (!isSelected && !isHovered && !stateChanged) return
 
     if (isSelected) {
       materialRef.current.color.copy(HIGHLIGHT_COLOR)
@@ -50,7 +70,9 @@ export function ConstellationFigure({ constellation }: ConstellationFigureProps)
         const pulse = selectionPulseIntensity(state.clock.elapsedTime - selectedAtRef.current)
         if (pulse > 0) materialRef.current.color.lerp(PULSE_COLOR, pulse)
       }
-    } else if (selectionChanged) {
+    } else if (isHovered) {
+      materialRef.current.color.copy(HOVER_COLOR)
+    } else {
       materialRef.current.color.copy(DIM_COLOR)
     }
   })
@@ -72,34 +94,25 @@ export function ConstellationFigure({ constellation }: ConstellationFigureProps)
     return array
   }, [constellation])
 
-  // A release, not `onClick` — see StarsLayer's identical, more detailed
-  // comment on why react-three-fiber's own `onClick` unreliably drops
-  // clicks in a scene with continuous camera easing between pointerdown
-  // and the click event.
-  function handlePointerUp(event: ThreeEvent<PointerEvent>) {
-    if (event.pointerType === 'mouse' && event.button !== 0) return
-    if (wasDrag()) return
-    // See interactionPriority.ts's doc comment: a constellation line
-    // passing near a DSO/planet marker (e.g. Orion's sword right next
-    // to M42), or right at the star it connects to, can otherwise
-    // out-rank and swallow a click meant for that marker/star. Defers to
-    // anything of strictly higher pick priority (stars, then precise
-    // markers) — never to another constellation line, so this can't
-    // mutually defer with itself.
-    if (hitsHigherPriorityObject(event.intersections, event.eventObject, PICK_PRIORITY.line)) return
-    event.stopPropagation()
-    select({ type: 'constellation', id: constellation.id })
-  }
+  usePickable(lineRef, 'constellation', (_index, point) => ({
+    id: constellation.id,
+    // Constellations have no single "true position" the way a star or
+    // marker does (a whole line figure, not one point) — the raycast's
+    // own hit point (where the ray actually crosses the nearest
+    // segment) is the most meaningful "direction" to compare against
+    // other candidates here.
+    direction: point.clone().normalize(),
+  }))
 
   return (
-    <lineSegments userData={{ pickPriority: PICK_PRIORITY.line }} onPointerUp={handlePointerUp}>
+    <lineSegments ref={lineRef}>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <lineBasicMaterial
         ref={materialRef}
         transparent
-        opacity={isSelected ? 0.95 : 0.35}
+        opacity={isSelected ? SELECTED_OPACITY : isHovered ? HOVER_OPACITY : DIM_OPACITY}
         depthWrite={false}
         blending={isSelected ? THREE.AdditiveBlending : THREE.NormalBlending}
       />

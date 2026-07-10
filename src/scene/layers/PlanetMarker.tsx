@@ -1,28 +1,29 @@
 import { Billboard, Html } from '@react-three/drei'
-import { type ThreeEvent } from '@react-three/fiber'
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import type { PlanetId } from '@/astronomy/planets'
 import { PLANET_CONTENT } from '@/content/planets'
 import { usePulseHighlightScale } from '@/hooks/usePulseHighlightScale'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
+import { usePickable } from '@/scene/interaction/usePickable'
 import { PlanetOrbitTrail } from '@/scene/layers/PlanetOrbitTrail'
-import { wasDrag } from '@/scene/picking/dragGuard'
-import { PICK_PRIORITY } from '@/scene/picking/interactionPriority'
 import { getPlanetGlowTexture, getPlanetTexture } from '@/scene/textures/planetTexture'
+import { useInteractionStore } from '@/state/useInteractionStore'
 import { useLayersStore } from '@/state/useLayersStore'
-import { useSceneStore } from '@/state/useSceneStore'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import type { Planet } from '@/types/planet'
 
 const BASE_MARKER_SIZE = 3.2
 const GLOW_SIZE_MULTIPLIER = 2.1
 const HIGHLIGHT_SCALE = 1.35
+const HOVER_SCALE = 1.12
 // Extra scale at the instant of selection, decaying away — see
 // scene/selectionPulse.ts.
 const PULSE_SCALE_BOOST = 0.5
 const HIGHLIGHT_BLEND = 0.45
+const HOVER_BLEND = 0.2
+const WHITE = new THREE.Color('#ffffff')
 
 interface PlanetMarkerProps {
   planet: Planet
@@ -49,13 +50,18 @@ interface PlanetMarkerProps {
  * not a true diameter ratio, which would make the rocky planets
  * invisible next to Jupiter at this scale. A soft additive glow sprite
  * sits behind the body for an atmospheric-halo feel.
+ *
+ * Hover and click detection are *not* implemented here — this component
+ * only renders the marker and declares it pick-able (`usePickable`
+ * below); `scene/interaction/InteractionManager` owns all hit-testing.
  */
 export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
   const isSelected = useSelectionStore(
     (state) => state.selection?.type === 'planet' && state.selection.id === planet.id,
   )
-  const select = useSelectionStore((state) => state.select)
-  const setHoveredObjectId = useSceneStore((state) => state.setHoveredObjectId)
+  const isHovered = useInteractionStore(
+    (state) => state.hovered?.type === 'planet' && state.hovered.id === planet.id,
+  )
   const showLabels = useLayersStore((state) => state.labels)
   const content = PLANET_CONTENT[planet.id]
   const baseColor = content?.colorHex ?? '#ffffff'
@@ -63,11 +69,14 @@ export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
   const markerSize = BASE_MARKER_SIZE * (content?.relativeSize ?? 1)
   const texture = useMemo(() => getPlanetTexture(visualStyle), [visualStyle])
   const glowTexture = useMemo(() => getPlanetGlowTexture(), [])
+  const meshRef = useRef<THREE.Mesh>(null)
 
   const color = useMemo(() => {
     const base = new THREE.Color(baseColor)
-    return isSelected ? base.lerp(new THREE.Color('#ffffff'), HIGHLIGHT_BLEND) : base
-  }, [baseColor, isSelected])
+    if (isSelected) return base.lerp(WHITE, HIGHLIGHT_BLEND)
+    if (isHovered) return base.lerp(WHITE, HOVER_BLEND)
+    return base
+  }, [baseColor, isSelected, isHovered])
 
   const position = useMemo((): [number, number, number] => {
     const [x, y, z] = equatorialToCartesian(planet.equatorial)
@@ -78,27 +87,14 @@ export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
     isSelected,
     HIGHLIGHT_SCALE,
     PULSE_SCALE_BOOST,
+    isHovered,
+    HOVER_SCALE,
   )
 
-  // A release, not `onClick` — see StarsLayer's detailed comment on why
-  // react-three-fiber's own `onClick` unreliably drops clicks in a scene
-  // with continuous camera easing between pointerdown and the click
-  // event.
-  function handlePointerUp(event: ThreeEvent<PointerEvent>) {
-    if (event.pointerType === 'mouse' && event.button !== 0) return
-    if (wasDrag()) return
-    event.stopPropagation()
-    select({ type: 'planet', id: planet.id })
-  }
-
-  function handlePointerOver(event: ThreeEvent<PointerEvent>) {
-    event.stopPropagation()
-    setHoveredObjectId(planet.id)
-  }
-
-  function handlePointerOut() {
-    setHoveredObjectId(null)
-  }
+  usePickable(meshRef, 'planet', (_index, point) => ({
+    id: planet.id,
+    direction: point.clone().normalize(),
+  }))
 
   return (
     <group>
@@ -117,12 +113,7 @@ export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
               blending={THREE.AdditiveBlending}
             />
           </mesh>
-          <mesh
-            userData={{ pickPriority: PICK_PRIORITY.precise }}
-            onPointerUp={handlePointerUp}
-            onPointerOver={handlePointerOver}
-            onPointerOut={handlePointerOut}
-          >
+          <mesh ref={meshRef}>
             <planeGeometry args={[markerSize, markerSize]} />
             <meshBasicMaterial map={texture} color={color} transparent depthWrite={false} />
           </mesh>
