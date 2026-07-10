@@ -1882,3 +1882,46 @@ to ~0.76s (the major-GC cycle disappeared entirely, leaving only cheap
 minor scavenger collections), and `FunctionCall` dropped from ~7.6s to
 ~1.3s. Hover/click/drag code is untouched — this is purely a React
 rendering-boundary fix in the marker components themselves.
+
+## Zoom lag, take two: label decluttering running full cost with names hidden
+
+The `React.memo` fix above was real and measurable, but zooming (and
+the camera's fly-to animation, e.g. flying to a searched-for object)
+still visibly stuttered exactly as before. Re-profiled with Chrome's
+actual JS CPU profiler this time (`Profiler.start`/`Profiler.stop` over
+a CDP session, sampling real call stacks — not just aggregate timeline
+category durations, which only say _how much_ time went where, not
+_which function_) during a sustained zoom burst: **two functions,
+`selectDeclutteredLabels` and `angularSeparationDeg` (both in
+`scene/picking/labelDeclutter.ts`), accounted for ~1.9 of the ~2
+profiled seconds of actual JS work** — by far the single largest
+contributor, dwarfing everything else including three.js's own matrix
+math and rendering calls.
+
+The bug: `StarLabelsLayer` reads `showNames` (`useLayersStore`'s
+`starNames`, **off by default**) and returns `null` if it's false — but
+that early return happens _after_ all of its `useMemo` hooks (React's
+rules of hooks require every hook to run on every render, regardless of
+any later early return). Its `namedStars` → `visibleStars` →
+`revealedStars` → `declutteredStars` memo chain culminates in exactly
+this decluttering algorithm running over the full named-star catalog
+(up to ~3,400 candidates) every time `useThrottledFov`'s bucket changes
+— which happens repeatedly throughout any sustained zoom or fly-to,
+since FOV is continuously animating throughout. All of that work was
+being thrown away immediately by the `if (!showNames) return null`
+below it, on **every single user's default configuration**, since star
+names are off out of the box. `LabelsLayer` (constellation names, on by
+default but only 88 candidates) had the identical structural bug, just
+cheap enough at that scale not to show up in the profile.
+
+**Fixed** by short-circuiting each memo chain's first step on
+`showNames` itself (`namedStars` returns `[]` immediately when names
+are hidden, `declutteredConstellations` likewise) — hooks still run
+every render as required, but the expensive body, and everything
+downstream of it, never executes unless the labels it computes are
+actually going to be shown. Re-profiled after the fix: `selectDeclutteredLabels`/`angularSeparationDeg` no longer appear anywhere
+in the top functions by self time; the remaining JS cost during zoom is
+now dominated by ordinary three.js matrix/render work with no single
+outsized contributor. The same fix automatically also speeds up the
+fly-to/search-flight case, since that animation drives the exact same
+FOV-throttled hooks over its own (typically longer) duration.

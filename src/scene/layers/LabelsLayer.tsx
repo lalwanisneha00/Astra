@@ -26,7 +26,13 @@ export function LabelsLayer({ constellations }: LabelsLayerProps) {
   const showNames = useLayersStore((state) => state.constellationNames)
   const fov = useThrottledFov(FOV_THROTTLE_STEP)
 
+  // Short-circuits when names are hidden, same reasoning as
+  // StarLabelsLayer's namedStars guard - hooks must still run every
+  // render, but there's no point re-decluttering on every FOV bucket
+  // change for a result the final `if (!showNames) return null` below
+  // throws away regardless.
   const declutteredConstellations = useMemo(() => {
+    if (!showNames) return []
     const candidates = constellations.map((constellation, index) => ({
       id: constellation.id,
       priority: index,
@@ -36,7 +42,7 @@ export function LabelsLayer({ constellations }: LabelsLayerProps) {
     const selected = selectDeclutteredLabels(candidates, fovScaledLabelSeparation(fov))
     const selectedIds = new Set(selected.map((candidate) => candidate.id))
     return constellations.filter((constellation) => selectedIds.has(constellation.id))
-  }, [constellations, fov])
+  }, [constellations, fov, showNames])
 
   if (!showNames) return null
 

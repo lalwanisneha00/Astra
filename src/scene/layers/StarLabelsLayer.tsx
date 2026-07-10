@@ -49,7 +49,18 @@ export function StarLabelsLayer({
   const showNames = useLayersStore((state) => state.starNames)
   const fov = useThrottledFov(FOV_THROTTLE_STEP)
 
-  const namedStars = useMemo(() => stars.filter((star) => star.names.length > 0), [stars])
+  // Short-circuits the whole reveal/declutter chain below when names
+  // are hidden (the common case - off by default) rather than just the
+  // final `return null`: hooks must still run every render, but with an
+  // empty `namedStars`, every downstream memo does nothing instead of
+  // still filtering/decluttering the full named-star catalog (up to
+  // ~3,400 candidates) on every FOV bucket change for a result that
+  // gets thrown away regardless. This was measured to cost over 1
+  // second of CPU time during a single zoom gesture even with names off.
+  const namedStars = useMemo(
+    () => (showNames ? stars.filter((star) => star.names.length > 0) : []),
+    [stars, showNames],
+  )
 
   const visibleStars = useMemo(() => {
     if (!observer) return namedStars
