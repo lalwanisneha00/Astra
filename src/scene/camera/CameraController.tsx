@@ -122,7 +122,18 @@ export function CameraController() {
         // the absolute-position fallback in handlePointerMove, just
         // bounded by the screen edge again.
         if (event.pointerType === 'mouse') {
-          canvas.requestPointerLock?.()?.catch(() => {})
+          // `unadjustedMovement` opts out of OS-level mouse acceleration
+          // for movementX/Y — Chromium has a long-documented bug where,
+          // without it, an occasional movementX/Y reports a spurious
+          // 300-400px jump during active pointer lock, which would blow
+          // straight through the click-vs-drag threshold for what was
+          // really a stationary click. Falls back to a plain lock
+          // request if the option itself isn't supported (older
+          // browsers reject the whole request rather than ignoring an
+          // unknown option).
+          canvas.requestPointerLock?.({ unadjustedMovement: true })?.catch(() => {
+            canvas.requestPointerLock?.()?.catch(() => {})
+          })
         }
       } else if (activePointers.size === 2) {
         isDraggingRef.current = false

@@ -1490,7 +1490,7 @@ pickPriority: ... }}` prop: `ConstellationFigure` → `line`,
 ## The actual click bug: react-three-fiber's own `onClick` gate
 
 The pick-priority fix above was real and necessary, but the user
-reported clicking was *still* unreliable afterward — correctly, since
+reported clicking was _still_ unreliable afterward — correctly, since
 that fix addressed a different bug than the one actually causing most
 of the dropped clicks. Found by reading react-three-fiber's own event
 source (`node_modules/@react-three/fiber/dist/events-*.js`) rather than
@@ -1502,7 +1502,7 @@ React-three-fiber's `onClick` (and `onContextMenu`/`onDoubleClick`) has
 its own internal restriction, independent of anything this app's code
 controls: on `pointerdown`, it snapshots which objects were hit
 (`internal.initialHits`); later, on the native `click` event, it only
-invokes an object's `onClick` handler if that *same* object is also in
+invokes an object's `onClick` handler if that _same_ object is also in
 `initialHits`:
 
 ```js
@@ -1520,7 +1520,7 @@ between `pointerdown` and the browser's `click` event, and during that
 gap the scene can genuinely move: a marker's screen position shifts, or
 a star just outside a slightly-different `Points` raycast threshold
 falls in or out of range — all without the user's finger or mouse
-moving at all. When the object hit at `click` time isn't *exactly* the
+moving at all. When the object hit at `click` time isn't _exactly_ the
 object hit at `pointerdown` time, react-three-fiber silently drops the
 event — no handler runs, nothing happens, and it looks like the click
 "didn't register." This is most likely to bite precisely the natural
@@ -1566,3 +1566,65 @@ Updated: `StarsLayer`, `ConstellationFigure`, `DsoMarker`,
 `PlanetMarker`, `SunMarker`, `MoonMarker` (every object type with its
 own selection), plus `dragGuard.ts`/`dragGuard.test.ts` and
 `CameraController.tsx` for the multi-touch marking.
+
+## Drag detection: path length vs. net displacement
+
+Reported as "clicks are often interpreted as drag attempts" after the
+zoom redesign. Investigated by diffing the current interaction code
+against the commit right before the Earth-to-Universe zoom feature was
+introduced (`git show 8c943f6:src/scene/camera/CameraController.tsx`
+and the equivalent for every layer). That comparison showed
+`CameraController`'s own rotate-drag detection — `isDraggingRef`, the
+6px `CLICK_DRAG_THRESHOLD_PX`, `addDragDistance`/`resetDragDistance` —
+is **byte-for-byte unchanged** since before the zoom work. The zoom
+redesign didn't touch the click/drag state machine at all; it just made
+a pre-existing algorithmic flaw in `dragGuard.ts` more consequential, by
+adding a momentum system that keeps the camera settling for noticeably
+longer after any interaction, and the additional per-frame reveal/pulse
+work happening during that same window.
+
+### The actual flaw
+
+`dragGuard.ts` accumulated **path length** — the sum of each per-move
+delta's own magnitude (`totalDragDistance += Math.hypot(dx, dy)`) —
+rather than **net displacement** from the original pointerdown
+position. A real click's incidental hand-tremor or touchpad jitter
+produces several tiny moves in alternating directions (e.g. +2px, then
+−2px, repeated) that a person perceives as "holding still." Path length
+sums the magnitude of every step regardless of direction, so this
+jitter compounds and can exceed the 6px threshold even though the
+pointer's net position barely changed — misreading a stationary click
+as a drag, which silently suppresses the eventual selection (see
+`wasDrag()`'s callers). This bug predates the zoom feature entirely (it
+was present in the very first version of `dragGuard.ts`,
+commit `8c943f6`) — it just had fewer opportunities to manifest before
+the zoom momentum system extended how long the camera keeps moving
+after an interaction, and therefore how often a "click" lands inside
+that window.
+
+**Fixed** by tracking the **vector sum** of the deltas instead
+(`netDx += dx; netDy += dy`, then `wasDrag()` checks
+`Math.hypot(netDx, netDy)`): a real drag's deltas consistently point the
+same general way, so a genuine drag is detected identically to before;
+jitter that cancels out in direction now correctly nets to ~0 instead of
+compounding. The public API (`resetDragDistance`/`addDragDistance`/
+`wasDrag`/`markMultiTouchGesture`) is unchanged, so no caller needed
+updating — only the internal accumulation formula changed.
+`dragGuard.test.ts` gained a test that reproduces the exact jitter
+pattern (10× alternating +2/−2px) alongside one confirming a slow,
+consistent-direction drag of the same total step count is still
+correctly detected.
+
+### Secondary hardening: a documented Pointer Lock bug
+
+While investigating, found a longstanding, documented Chromium bug
+(tracked upstream) where `movementX`/`movementY` occasionally report a
+spurious 300-400px jump during active Pointer Lock, independent of any
+of this app's own code — large enough to blow through the drag
+threshold outright. `CameraController` now requests pointer lock with
+`{ unadjustedMovement: true }` (opts out of OS-level mouse
+acceleration, the documented mitigation), falling back to a plain
+`requestPointerLock()` if the browser rejects the option itself
+(handled the same `.catch()`-and-continue way lock failures always
+were — dragging still works via the absolute-position fallback either
+way).
