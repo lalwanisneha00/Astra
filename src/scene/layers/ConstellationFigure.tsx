@@ -72,7 +72,12 @@ export function ConstellationFigure({ constellation }: ConstellationFigureProps)
     return array
   }, [constellation])
 
-  function handleClick(event: ThreeEvent<MouseEvent>) {
+  // A release, not `onClick` — see StarsLayer's identical, more detailed
+  // comment on why react-three-fiber's own `onClick` unreliably drops
+  // clicks in a scene with continuous camera easing between pointerdown
+  // and the click event.
+  function handlePointerUp(event: ThreeEvent<PointerEvent>) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
     if (wasDrag()) return
     // See interactionPriority.ts's doc comment: a constellation line
     // passing near a DSO/planet marker (e.g. Orion's sword right next
@@ -87,7 +92,7 @@ export function ConstellationFigure({ constellation }: ConstellationFigureProps)
   }
 
   return (
-    <lineSegments userData={{ pickPriority: PICK_PRIORITY.line }} onClick={handleClick}>
+    <lineSegments userData={{ pickPriority: PICK_PRIORITY.line }} onPointerUp={handlePointerUp}>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>

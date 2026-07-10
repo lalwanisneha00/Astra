@@ -1406,7 +1406,7 @@ feedback, and removes several confirmed per-frame inefficiencies.
   `hitsHigherPriorityObject(intersections, self, ownPriority)`, which
   only defers to a hit of **strictly higher** priority. Every
   interactive object now tags itself via a plain `userData={{
-  pickPriority: ... }}` prop: `ConstellationFigure` → `line`,
+pickPriority: ... }}` prop: `ConstellationFigure` → `line`,
   `StarsLayer`'s `<points>` → `star`, `DsoMarker`/`PlanetMarker`/
   `SunMarker`/`MoonMarker`'s clickable mesh → `precise`. This resolves
   correctly regardless of raycast dispatch order: a star always wins
@@ -1421,7 +1421,7 @@ feedback, and removes several confirmed per-frame inefficiencies.
 ### Cursor feedback
 
 - **`hooks/useHoverCursor.ts`** (new): sets `document.body.style.cursor
-  = 'pointer'` while `useSceneStore.hoveredObjectId` is non-null, and
+= 'pointer'` while `useSceneStore.hoveredObjectId` is non-null, and
   back to the default otherwise. Subscribed via zustand's vanilla
   `subscribe()` (not a reactive selector) since hover can change on
   every pointer move across the sky — a plain DOM style write needs no
@@ -1486,3 +1486,83 @@ feedback, and removes several confirmed per-frame inefficiencies.
   specifically to avoid CPU-side filtering/geometry rebuilds; WebGL's
   own hardware clipping already avoids fragment work for off-screen
   points, which is the cost that actually matters at this scale.
+
+## The actual click bug: react-three-fiber's own `onClick` gate
+
+The pick-priority fix above was real and necessary, but the user
+reported clicking was *still* unreliable afterward — correctly, since
+that fix addressed a different bug than the one actually causing most
+of the dropped clicks. Found by reading react-three-fiber's own event
+source (`node_modules/@react-three/fiber/dist/events-*.js`) rather than
+guessing further.
+
+### Root cause
+
+React-three-fiber's `onClick` (and `onContextMenu`/`onDoubleClick`) has
+its own internal restriction, independent of anything this app's code
+controls: on `pointerdown`, it snapshots which objects were hit
+(`internal.initialHits`); later, on the native `click` event, it only
+invokes an object's `onClick` handler if that *same* object is also in
+`initialHits`:
+
+```js
+// react-three-fiber's events.js
+if (!isClickEvent || internal.initialHits.includes(eventObject)) {
+  handler(data)
+}
+```
+
+This app's camera is essentially never perfectly still — zoom momentum
+coasts for up to a second or two after any scroll/pinch, fly-to
+animations ease over ~1s, and search navigation can still be
+mid-flight. A real click/tap always spans a few dozen milliseconds
+between `pointerdown` and the browser's `click` event, and during that
+gap the scene can genuinely move: a marker's screen position shifts, or
+a star just outside a slightly-different `Points` raycast threshold
+falls in or out of range — all without the user's finger or mouse
+moving at all. When the object hit at `click` time isn't *exactly* the
+object hit at `pointerdown` time, react-three-fiber silently drops the
+event — no handler runs, nothing happens, and it looks like the click
+"didn't register." This is most likely to bite precisely the natural
+click pattern of this app: zoom or pan to find something, then click it
+immediately, while the camera is still settling.
+
+`onPointerMove`/`onPointerOver`/`onPointerOut` have no such
+restriction (confirmed in the same source) — which is exactly why the
+earlier hover fix held up on its own while clicking kept failing: hover
+was never subject to this gate to begin with.
+
+### Fix
+
+Every selectable object's click handler is now bound to `onPointerUp`
+instead of `onClick` — `pointerup` has no "must match the pointerdown
+hit" restriction, so it always reflects a fresh raycast at the exact
+moment of release, matching the intuitive "select whatever's under the
+cursor when you let go" behavior a click should have. `wasDrag()` still
+does the actual click-vs-drag distinction (unchanged), and the
+pick-priority defer logic (`hitsHigherPriorityObject`) still applies
+identically, since react-three-fiber computes `intersections` the same
+way for every event type — only the `isClickEvent` gate differs by
+name.
+
+Two things had to be added back that `onClick`/native `click` handled
+for free:
+
+- **Button filtering.** `onClick` only ever fires for the primary mouse
+  button; `onPointerUp` fires for _any_ button release, so every
+  handler now starts with
+  `if (event.pointerType === 'mouse' && event.button !== 0) return`
+  (touch/pen pass straight through, matching `CameraController`'s own
+  pointerdown guard).
+- **Multi-touch releases.** A native `click` generally never fires for
+  a multi-finger (pinch) gesture; `pointerup` fires once per released
+  finger regardless. `dragGuard.ts` gained `markMultiTouchGesture()`,
+  called by `CameraController` the moment a second pointer joins a
+  gesture, so `wasDrag()` also returns `true` for the rest of any
+  pinch — even though a pinch alone doesn't accumulate the
+  single-pointer rotate distance `addDragDistance` tracks.
+
+Updated: `StarsLayer`, `ConstellationFigure`, `DsoMarker`,
+`PlanetMarker`, `SunMarker`, `MoonMarker` (every object type with its
+own selection), plus `dragGuard.ts`/`dragGuard.test.ts` and
+`CameraController.tsx` for the multi-touch marking.

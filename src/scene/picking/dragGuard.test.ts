@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { addDragDistance, resetDragDistance, wasDrag } from './dragGuard'
+import { addDragDistance, markMultiTouchGesture, resetDragDistance, wasDrag } from './dragGuard'
 
 describe('dragGuard', () => {
   beforeEach(() => {
@@ -34,6 +34,18 @@ describe('dragGuard', () => {
 
   it('resets cleanly for a new gesture after a prior drag', () => {
     addDragDistance(50, 50)
+    expect(wasDrag()).toBe(true)
+    resetDragDistance()
+    expect(wasDrag()).toBe(false)
+  })
+
+  it('treats a marked multi-touch gesture as a drag even with zero accumulated distance', () => {
+    markMultiTouchGesture()
+    expect(wasDrag()).toBe(true)
+  })
+
+  it('clears the multi-touch flag on reset for the next gesture', () => {
+    markMultiTouchGesture()
     expect(wasDrag()).toBe(true)
     resetDragDistance()
     expect(wasDrag()).toBe(false)

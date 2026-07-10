@@ -217,8 +217,19 @@ export function StarsLayer({
     setHoveredIndex(-1)
   }, [setHoveredIndex])
 
-  const handleClick = useCallback(
-    (event: ThreeEvent<MouseEvent>) => {
+  // A release, not `onClick`: react-three-fiber only calls `onClick` if
+  // the object was *also* hit at the preceding `pointerdown` (its own
+  // internal `initialHits` gate) — but this app's camera keeps easing
+  // (zoom momentum, fly-to, twinkle) between pointerdown and the click
+  // event, so the raycast can legitimately land on a different star (or
+  // none at all) a frame or two later even though the user never moved
+  // the pointer. `onPointerUp` has no such gate — it always reflects the
+  // raycast at release time — so it's the reliable way to detect "the
+  // user tapped this star," with `wasDrag()` still doing the real
+  // click-vs-drag distinction.
+  const handlePointerUp = useCallback(
+    (event: ThreeEvent<PointerEvent>) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return
       if (wasDrag()) return
       // See interactionPriority.ts's doc comment for why this check is
       // necessary: without it, a star can silently swallow a click
@@ -242,7 +253,7 @@ export function StarsLayer({
       userData={{ pickPriority: PICK_PRIORITY.star }}
       onPointerMove={handlePointerMove}
       onPointerOut={handlePointerOut}
-      onClick={handleClick}
+      onPointerUp={handlePointerUp}
     >
       {/* Keyed on count: only changes when a new tier finishes loading,
           not on every horizon recompute (altitude is a separate,

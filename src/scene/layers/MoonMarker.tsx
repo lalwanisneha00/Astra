@@ -59,7 +59,12 @@ export function MoonMarker({ moon }: MoonMarkerProps) {
     PULSE_SCALE_BOOST,
   )
 
-  function handleClick(event: ThreeEvent<MouseEvent>) {
+  // A release, not `onClick` — see StarsLayer's detailed comment on why
+  // react-three-fiber's own `onClick` unreliably drops clicks in a scene
+  // with continuous camera easing between pointerdown and the click
+  // event.
+  function handlePointerUp(event: ThreeEvent<PointerEvent>) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
     if (wasDrag()) return
     event.stopPropagation()
     select({ type: 'moon', id: 'moon' })
@@ -80,7 +85,7 @@ export function MoonMarker({ moon }: MoonMarkerProps) {
         <mesh
           ref={highlightRef}
           userData={{ pickPriority: PICK_PRIORITY.precise }}
-          onClick={handleClick}
+          onPointerUp={handlePointerUp}
           onPointerOver={handlePointerOver}
           onPointerOut={handlePointerOut}
         >

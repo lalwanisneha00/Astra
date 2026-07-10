@@ -8,7 +8,11 @@ import { prefersReducedMotion } from '@/lib/motion'
 import { directionToYawPitch, shortestAngleTarget } from '@/scene/camera/orientation'
 import { stepZoomTarget } from '@/scene/camera/zoom'
 import { MAX_FOV, MIN_FOV } from '@/scene/constants'
-import { addDragDistance, resetDragDistance } from '@/scene/picking/dragGuard'
+import {
+  addDragDistance,
+  markMultiTouchGesture,
+  resetDragDistance,
+} from '@/scene/picking/dragGuard'
 import { useSceneStore } from '@/state/useSceneStore'
 import type { EquatorialCoord } from '@/types/coordinates'
 
@@ -109,10 +113,10 @@ export function CameraController() {
         isDraggingRef.current = true
         lastPointer = { x: event.clientX, y: event.clientY }
         lastMoveTime = performance.now()
-        // Fresh gesture: any accumulated distance from a prior drag no
-        // longer applies (see dragGuard.ts — this is what tells every
-        // object's onClick whether the eventual click was a real click
-        // or the tail end of a drag).
+        // Fresh gesture: any accumulated distance (or multi-touch flag)
+        // from a prior gesture no longer applies (see dragGuard.ts —
+        // this is what tells every object's release handler whether the
+        // eventual release was a real tap or the tail end of a drag).
         resetDragDistance()
         // Best-effort: if denied/unsupported, dragging still works via
         // the absolute-position fallback in handlePointerMove, just
@@ -126,6 +130,10 @@ export function CameraController() {
         pinchLastDistance = a && b ? distanceBetween(a, b) : null
         lastPinchTime = performance.now()
         zoomVelocityRef.current = 0
+        // A pinch's eventual release(s) must never be read as a
+        // selection tap on whatever's under either finger — see
+        // dragGuard.ts.
+        markMultiTouchGesture()
       }
     }
 
