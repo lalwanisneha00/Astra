@@ -1,5 +1,5 @@
 import { Billboard, Html } from '@react-three/drei'
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import type * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { usePulseHighlightScale } from '@/hooks/usePulseHighlightScale'
@@ -37,7 +37,7 @@ interface MoonMarkerProps {
  * only renders the marker and declares it pick-able (`usePickable`
  * below); `scene/interaction/InteractionManager` owns all hit-testing.
  */
-export function MoonMarker({ moon }: MoonMarkerProps) {
+export const MoonMarker = memo(function MoonMarker({ moon }: MoonMarkerProps) {
   const isSelected = useSelectionStore(
     (state) => state.selection?.type === 'moon' && state.selection.id === 'moon',
   )
@@ -89,4 +89,4 @@ export function MoonMarker({ moon }: MoonMarkerProps) {
       )}
     </group>
   )
-}
+})

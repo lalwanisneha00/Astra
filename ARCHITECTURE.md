@@ -1760,7 +1760,7 @@ Unchanged, verified via `git diff`: `src/scene/picking/dragGuard.ts`,
 
 After the Interaction Manager rebuild above, hover/click still misbehaved
 inconsistently: only stars and constellations reliably highlighted, and
-clicks would sometimes leave the *previous* selection in place no matter
+clicks would sometimes leave the _previous_ selection in place no matter
 where the next click landed. Rather than guess again, this was diagnosed
 with a headless Playwright instance driven against the real dev server
 (`page.on('pageerror', ...)` plus a temporary debug hook exposing the
@@ -1776,19 +1776,19 @@ one. That surfaced two concrete, unrelated bugs, both in
 completely unguarded. In the Playwright reproduction this threw
 `InvalidStateError` on **every single pointerdown** — an uncaught
 exception that aborted the rest of the handler immediately, meaning
-`activePointers.set(...)` and `resetDragDistance()` (both *after* the
+`activePointers.set(...)` and `resetDragDistance()` (both _after_ the
 capture call) silently never ran. Since `resetDragDistance()` is what
 tells the next gesture's release that no leftover distance from a prior
 gesture applies, skipping it left `dragGuard`'s accumulated net
 displacement stale across gestures — corrupting `wasDrag()` for the
-*next* click and causing `InteractionManager`'s `pointerup` handler to
+_next_ click and causing `InteractionManager`'s `pointerup` handler to
 bail out (`if (wasDrag()) return`) without ever calling `select()`,
 leaving whatever was previously selected untouched. Hover was unaffected
 (it only depends on `pointermove`, never touches this code path), which
 is exactly why stars/constellations — hovered far more often simply by
 occupying more of the screen — looked fine while precise, rarely-hit
 mesh markers (planets/Sun/Moon/DSOs) seemed to never highlight: hover
-*did* work for them too, just far less frequently sampled in casual
+_did_ work for them too, just far less frequently sampled in casual
 testing.
 
 **Fixed** by wrapping only the capture call in `try`/`catch` (capture is
@@ -1806,7 +1806,7 @@ to ~30ms in the Playwright environment, plausibly longer under real
 system load — while `pointerup`'s `exitPointerLock()` call is a
 synchronous, one-shot check (`if (document.pointerLockElement ===
 canvas) exitPointerLock()`). A fast click's `pointerup` can fire
-*before* the lock requested on the preceding `pointerdown` has actually
+_before_ the lock requested on the preceding `pointerdown` has actually
 been granted: the exit check finds nothing locked yet (no-op), and the
 grant then lands moments later with nothing left to release it. The
 result is an **orphaned, stuck pointer lock** that persists into every
@@ -1839,6 +1839,46 @@ clicks landing on the already-open info panel's own screen region,
 correctly intercepting the click before it reaches the canvas — expected
 UI behavior, not a picking bug).
 
-Both fixes are narrowly scoped to *when*/*whether* two browser APIs are
+Both fixes are narrowly scoped to _when_/_whether_ two browser APIs are
 called in `CameraController.tsx`; `dragGuard.ts`'s distance-threshold
 math and net-displacement accumulation are untouched.
+
+## Zoom lag: an unmemoized marker tree re-rendering on every incidental ancestor update
+
+With touch/click reliability fixed, zooming in and out still visibly
+stuttered. Measured with a real Chrome DevTools trace (via a raw CDP
+`Tracing.start`/`Tracing.end` session, not the noisy rAF-delta timing a
+headless/software-rendered browser gives) during a scripted wheel-zoom
+burst plus its momentum settle tail: **~2.95 seconds of the ~2-second
+window were spent in garbage collection**, including a full major-GC
+background-marking cycle, and `FunctionCall` totaled ~7.6 seconds. That
+level of GC pressure only happens when something is allocating far more
+than the app's actual visual output should require.
+
+Root-caused by instrumenting render counts (temporarily, removed after)
+at `App`, `SceneCanvas`, `DeepSkyLayer`, and `DsoMarker`: a single
+zoom action caused exactly one extra React render at `App` (the
+`pointermove` needed to aim the wheel at the canvas changes hover
+state) — and because none of `DsoMarker`, `PlanetMarker`, `SunMarker`,
+`MoonMarker`, or `ConstellationFigure` were memoized, that one
+incidental ancestor render cascaded into a full re-render of **every
+mounted instance** of all five components (up to ~500 DSOs alone) even
+though none of their own props had actually changed. Each re-render
+re-evaluates hooks and re-creates elements for their children,
+including drei's `Billboard` (which allocates a fresh `Quaternion` in
+its component body on every render) — multiplied across hundreds of
+instances, dozens of times a second during a sustained zoom gesture,
+that's exactly the kind of allocation volume that forces the browser
+into aggressive, stall-inducing garbage collection.
+
+**Fixed** by wrapping all five in `React.memo`, so each only re-renders
+when its own `dso`/`planet`/`sun`/`moon`/`constellation` prop (or
+`explorationEnabled`/`date`) actually changes by reference — which
+`useDeepSkyObjects`/`useConstellations`/etc. already guarantee stays
+stable across unrelated re-renders (each object is created once, in a
+`useState` initializer or a load effect, not recreated every render).
+Re-measured with the identical CDP trace: GC time dropped from ~2.95s
+to ~0.76s (the major-GC cycle disappeared entirely, leaving only cheap
+minor scavenger collections), and `FunctionCall` dropped from ~7.6s to
+~1.3s. Hover/click/drag code is untouched — this is purely a React
+rendering-boundary fix in the marker components themselves.

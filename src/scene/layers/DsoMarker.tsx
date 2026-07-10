@@ -1,6 +1,6 @@
 import { Billboard, Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { memo, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { DSO_TYPE_META } from '@/content/dsoTypes'
@@ -69,7 +69,7 @@ function markerSizeMultiplier(sizeArcmin: number | null): number {
  * only renders the marker and declares it pick-able (`usePickable`
  * below); `scene/interaction/InteractionManager` owns all hit-testing.
  */
-export function DsoMarker({ dso, explorationEnabled }: DsoMarkerProps) {
+export const DsoMarker = memo(function DsoMarker({ dso, explorationEnabled }: DsoMarkerProps) {
   const isSelected = useSelectionStore(
     (state) => state.selection?.type === 'dso' && state.selection.id === dso.id,
   )
@@ -185,4 +185,4 @@ export function DsoMarker({ dso, explorationEnabled }: DsoMarkerProps) {
       )}
     </>
   )
-}
+})

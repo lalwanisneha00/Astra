@@ -1,5 +1,5 @@
 import { Billboard, Html } from '@react-three/drei'
-import { useMemo, useRef } from 'react'
+import { memo, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { usePulseHighlightScale } from '@/hooks/usePulseHighlightScale'
@@ -35,7 +35,7 @@ interface SunMarkerProps {
  * only renders the marker and declares it pick-able (`usePickable`
  * below); `scene/interaction/InteractionManager` owns all hit-testing.
  */
-export function SunMarker({ sun }: SunMarkerProps) {
+export const SunMarker = memo(function SunMarker({ sun }: SunMarkerProps) {
   const isSelected = useSelectionStore(
     (state) => state.selection?.type === 'sun' && state.selection.id === 'sun',
   )
@@ -102,4 +102,4 @@ export function SunMarker({ sun }: SunMarkerProps) {
       )}
     </group>
   )
-}
+})

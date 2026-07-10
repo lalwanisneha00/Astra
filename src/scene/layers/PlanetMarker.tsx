@@ -1,5 +1,5 @@
 import { Billboard, Html } from '@react-three/drei'
-import { useMemo, useRef } from 'react'
+import { memo, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import type { PlanetId } from '@/astronomy/planets'
@@ -55,7 +55,7 @@ interface PlanetMarkerProps {
  * only renders the marker and declares it pick-able (`usePickable`
  * below); `scene/interaction/InteractionManager` owns all hit-testing.
  */
-export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
+export const PlanetMarker = memo(function PlanetMarker({ planet, date }: PlanetMarkerProps) {
   const isSelected = useSelectionStore(
     (state) => state.selection?.type === 'planet' && state.selection.id === planet.id,
   )
@@ -128,4 +128,4 @@ export function PlanetMarker({ planet, date }: PlanetMarkerProps) {
       )}
     </group>
   )
-}
+})

@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { memo, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { usePickable } from '@/scene/interaction/usePickable'
@@ -33,7 +33,9 @@ interface ConstellationFigureProps {
  * only renders the figure and declares it pick-able (`usePickable`
  * below); `scene/interaction/InteractionManager` owns all hit-testing.
  */
-export function ConstellationFigure({ constellation }: ConstellationFigureProps) {
+export const ConstellationFigure = memo(function ConstellationFigure({
+  constellation,
+}: ConstellationFigureProps) {
   const isSelected = useSelectionStore(
     (state) => state.selection?.type === 'constellation' && state.selection.id === constellation.id,
   )
@@ -118,4 +120,4 @@ export function ConstellationFigure({ constellation }: ConstellationFigureProps)
       />
     </lineSegments>
   )
-}
+})
