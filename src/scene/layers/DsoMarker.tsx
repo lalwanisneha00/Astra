@@ -7,8 +7,9 @@ import { DSO_TYPE_META } from '@/content/dsoTypes'
 import { damp } from '@/lib/easing'
 import { clamp } from '@/lib/math'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
-import { dsoRevealLevel, revealProgress } from '@/scene/exploration'
+import { DSO_CLICKABLE_OPACITY, dsoRevealLevel, revealProgress } from '@/scene/exploration'
 import { wasDrag } from '@/scene/picking/dragGuard'
+import { selectionPulseIntensity } from '@/scene/selectionPulse'
 import { getDsoTexture } from '@/scene/textures/dsoTexture'
 import { useLayersStore } from '@/state/useLayersStore'
 import { useSceneStore } from '@/state/useSceneStore'
@@ -20,18 +21,18 @@ const DEFAULT_SIZE_ARCMIN = 8
 const MIN_SIZE_MULTIPLIER = 0.6
 const MAX_SIZE_MULTIPLIER = 3
 const HIGHLIGHT_SCALE = 1.4
+// Extra scale on top of HIGHLIGHT_SCALE at the instant of selection,
+// decaying away over the pulse — see scene/selectionPulse.ts.
+const PULSE_SCALE_BOOST = 0.5
 const HIGHLIGHT_BLEND = 0.4
 const OPACITY_DAMPING = 6
-// Below this, the object is faded in too little to be worth clicking —
-// mirrors StarsLayer's isCulled treating a mostly-invisible star as
-// unpickable.
-const CLICKABLE_OPACITY = 0.1
 
 interface DsoMarkerProps {
   dso: DeepSkyObject
-  /** Whether Explore Mode's Earth-to-Universe progressive reveal
-   * applies at all (always false in observer mode — Today's Night Sky
-   * shows every loaded object regardless of zoom, unaffected by this). */
+  /** Whether the Earth-to-Universe progressive reveal applies. Always
+   * true in both modes — in observer mode, `DeepSkyLayer` has already
+   * filtered to only above-horizon objects, so this fades *within* that
+   * real set the same way it fades the full set in explore mode. */
   explorationEnabled: boolean
 }
 
@@ -51,12 +52,11 @@ function markerSizeMultiplier(sizeArcmin: number | null): number {
  * celestial sphere like stars/constellations, not time-varying like
  * planets, so position never needs recomputing.
  *
- * In explore mode, opacity eases toward a target derived from the
- * object's own reveal level (see scene/exploration.ts's
- * `dsoRevealLevel`) each frame — cheap at ~500 objects, and gives the
- * spec's "fade them in smoothly" directly, with no CPU-side filtering
- * or geometry rebuild (the exact pattern this app's star catalog
- * already learned to avoid).
+ * Opacity eases toward a target derived from the object's own reveal
+ * level (see scene/exploration.ts's `dsoRevealLevel`) each frame — cheap
+ * at ~500 objects, and gives the spec's "fade them in smoothly" directly,
+ * with no CPU-side filtering or geometry rebuild (the exact pattern this
+ * app's star catalog already learned to avoid).
  */
 export function DsoMarker({ dso, explorationEnabled }: DsoMarkerProps) {
   const isSelected = useSelectionStore(
@@ -71,7 +71,15 @@ export function DsoMarker({ dso, explorationEnabled }: DsoMarkerProps) {
   const revealLevel = useMemo(() => dsoRevealLevel(dso), [dso])
 
   const materialRef = useRef<THREE.MeshBasicMaterial>(null)
+  const meshRef = useRef<THREE.Mesh>(null)
   const currentOpacityRef = useRef(1)
+  // Tracked inline (rather than via the shared useSelectionPulse hook)
+  // to avoid a second useFrame subscription per instance — this layer
+  // already has its own for opacity, and at up to ~500 objects, doubling
+  // the per-frame callback count is exactly the kind of cost this app's
+  // performance work has learned to avoid.
+  const wasSelectedRef = useRef(false)
+  const selectedAtRef = useRef<number | null>(null)
 
   const color = useMemo(() => {
     const base = new THREE.Color(meta.color)
@@ -88,16 +96,28 @@ export function DsoMarker({ dso, explorationEnabled }: DsoMarkerProps) {
     const target = explorationEnabled ? revealProgress(camera.fov, revealLevel) : 1
     currentOpacityRef.current = damp(currentOpacityRef.current, target, OPACITY_DAMPING, delta)
     if (materialRef.current) materialRef.current.opacity = currentOpacityRef.current
+
+    if (isSelected && !wasSelectedRef.current) selectedAtRef.current = state.clock.elapsedTime
+    wasSelectedRef.current = isSelected
+    const pulse =
+      isSelected && selectedAtRef.current !== null
+        ? selectionPulseIntensity(state.clock.elapsedTime - selectedAtRef.current)
+        : 0
+
+    if (meshRef.current) {
+      const scale = isSelected ? HIGHLIGHT_SCALE + pulse * PULSE_SCALE_BOOST : 1
+      meshRef.current.scale.setScalar(scale)
+    }
   })
 
   function handleClick(event: ThreeEvent<MouseEvent>) {
-    if (wasDrag() || currentOpacityRef.current < CLICKABLE_OPACITY) return
+    if (wasDrag() || currentOpacityRef.current < DSO_CLICKABLE_OPACITY) return
     event.stopPropagation()
     select({ type: 'dso', id: dso.id })
   }
 
   function handlePointerOver(event: ThreeEvent<PointerEvent>) {
-    if (currentOpacityRef.current < CLICKABLE_OPACITY) return
+    if (currentOpacityRef.current < DSO_CLICKABLE_OPACITY) return
     event.stopPropagation()
     setHoveredObjectId(dso.id)
   }
@@ -110,7 +130,7 @@ export function DsoMarker({ dso, explorationEnabled }: DsoMarkerProps) {
     <>
       <Billboard position={position}>
         <mesh
-          scale={isSelected ? HIGHLIGHT_SCALE : 1}
+          ref={meshRef}
           onClick={handleClick}
           onPointerOver={handlePointerOver}
           onPointerOut={handlePointerOut}

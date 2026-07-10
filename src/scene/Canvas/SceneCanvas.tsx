@@ -72,14 +72,14 @@ export function SceneCanvas({
         catalog={starCatalog}
         horizonCullingEnabled={horizonCullingEnabled}
         altitudes={altitudes}
-        explorationEnabled={!horizonCullingEnabled}
+        explorationEnabled
       />
       <LabelsLayer constellations={constellations} />
       <StarLabelsLayer
         stars={starCatalog.stars}
         observer={observer}
         date={date}
-        explorationEnabled={!horizonCullingEnabled}
+        explorationEnabled
       />
       <DeepSkyLayer objects={deepSkyObjects} observer={observer} date={date} />
       <PlanetsLayer observer={observer} date={date} />

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import type { HighlightContext } from '@/astronomy/highlights'
 import { useDismissablePanel } from '@/hooks/useDismissablePanel'
 import { useTonightsHighlights } from '@/hooks/useTonightsHighlights'
@@ -21,9 +21,24 @@ interface TonightsHighlightsPanelProps {
  * the Moon, active meteor showers, conjunctions, upcoming eclipses,
  * well-placed constellations, and standout deep-sky objects — see
  * `astronomy/highlights.ts` for the detector engine driving this list.
+ *
+ * Wrapped in `memo` — see SearchBar's identical note. `context` is a
+ * stable `null` in explore mode (App's own `useMemo` returns the literal
+ * `null`, not a new object), so this skips re-rendering entirely outside
+ * Today's Night Sky; in observer mode `context` legitimately changes
+ * with the date, so it re-renders exactly when it needs to.
  */
-export function TonightsHighlightsPanel({ context }: TonightsHighlightsPanelProps) {
+export const TonightsHighlightsPanel = memo(function TonightsHighlightsPanel({
+  context,
+}: TonightsHighlightsPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
+  // Whether the user has opened this panel at least once *this session*
+  // — drives the attention-pulse on the trigger below. A plain `useState`
+  // is enough: this component is always mounted by App (its own early
+  // `return null` doesn't unmount it), so this persists across mode
+  // switches and open/close cycles for the whole session, resetting
+  // only on a real page reload.
+  const [hasOpenedOnce, setHasOpenedOnce] = useState(false)
   const reducedMotion = useReducedMotion()
   const panelRef = useDismissablePanel<HTMLDivElement>(() => setIsOpen(false))
   const select = useSelectionStore((state) => state.select)
@@ -36,6 +51,16 @@ export function TonightsHighlightsPanel({ context }: TonightsHighlightsPanelProp
     if (highlight.selection) select(highlight.selection)
     setIsOpen(false)
   }
+
+  function handleToggleOpen() {
+    setIsOpen((open) => {
+      const next = !open
+      if (next) setHasOpenedOnce(true)
+      return next
+    })
+  }
+
+  const showAttentionPulse = !hasOpenedOnce && !reducedMotion
 
   return (
     <div className="pointer-events-auto flex flex-col items-start gap-2">
@@ -101,17 +126,37 @@ export function TonightsHighlightsPanel({ context }: TonightsHighlightsPanelProp
           </motion.div>
         )}
       </AnimatePresence>
-      <GlassPanel className="order-1 px-3 py-2">
-        <button
-          type="button"
-          onClick={() => setIsOpen((open) => !open)}
-          aria-expanded={isOpen}
-          aria-label="Tonight's highlights"
-          className="text-sm text-star-100 transition hover:text-accent-400"
-        >
-          ✨
-        </button>
-      </GlassPanel>
+      <motion.div
+        className="order-1 rounded-2xl"
+        animate={
+          showAttentionPulse
+            ? {
+                boxShadow: [
+                  '0 0 0px 0px rgba(138,180,255,0)',
+                  '0 0 14px 3px rgba(138,180,255,0.55)',
+                  '0 0 0px 0px rgba(138,180,255,0)',
+                ],
+              }
+            : { boxShadow: '0 0 0px 0px rgba(138,180,255,0)' }
+        }
+        transition={
+          showAttentionPulse
+            ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
+            : { duration: 0.3 }
+        }
+      >
+        <GlassPanel className="px-3 py-2">
+          <button
+            type="button"
+            onClick={handleToggleOpen}
+            aria-expanded={isOpen}
+            aria-label="Tonight's highlights"
+            className="text-sm text-star-100 transition hover:text-accent-400"
+          >
+            ✨
+          </button>
+        </GlassPanel>
+      </motion.div>
     </div>
   )
-}
+})

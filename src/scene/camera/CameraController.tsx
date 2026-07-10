@@ -7,12 +7,11 @@ import { clamp } from '@/lib/math'
 import { prefersReducedMotion } from '@/lib/motion'
 import { directionToYawPitch, shortestAngleTarget } from '@/scene/camera/orientation'
 import { stepZoomTarget } from '@/scene/camera/zoom'
+import { MAX_FOV, MIN_FOV } from '@/scene/constants'
 import { addDragDistance, resetDragDistance } from '@/scene/picking/dragGuard'
 import { useSceneStore } from '@/state/useSceneStore'
 import type { EquatorialCoord } from '@/types/coordinates'
 
-const MIN_FOV = 20
-const MAX_FOV = 100
 const MAX_PITCH = THREE.MathUtils.degToRad(85)
 const FOV_DAMPING = 10
 const INERTIA_DAMPING = 6

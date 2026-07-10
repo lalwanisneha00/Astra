@@ -7,6 +7,7 @@ import { MAGNITUDE_FADE_WIDTH, starMagnitudeCutoff } from '@/scene/exploration'
 import { wasDrag } from '@/scene/picking/dragGuard'
 import { hitsAnotherObject } from '@/scene/picking/interactionPriority'
 import { fovScaledPointThreshold } from '@/scene/picking/pointThreshold'
+import { selectionPulseIntensity } from '@/scene/selectionPulse'
 import fragmentShader from '@/scene/shaders/starField.frag.glsl?raw'
 import vertexShader from '@/scene/shaders/starField.vert.glsl?raw'
 import { useSceneStore } from '@/state/useSceneStore'
@@ -31,10 +32,13 @@ interface StarsLayerProps {
    * every horizon recompute was the actual cause of the time-scrubbing
    * hang this replaced (see ARCHITECTURE.md's Phase 8 fix note). */
   altitudes: Float32Array | null
-  /** Whether Explore Mode's Earth-to-Universe progressive reveal
-   * applies at all (always false in observer mode — Today's Night Sky
-   * keeps showing every loaded star regardless of zoom, per the
-   * spec's explicit "separate from Today's Night Sky"). */
+  /** Whether the Earth-to-Universe progressive reveal applies. Always
+   * true in both modes: in explore mode it's the only visibility
+   * filter; in observer mode it composes with `horizonCullingEnabled`
+   * (a star must be both above the horizon *and* revealed at the
+   * current zoom depth), so Today's Night Sky starts at the same
+   * naked-eye baseline and reveals more exactly the way Explore Mode
+   * does, on top of showing only what's really in the sky right now. */
   explorationEnabled: boolean
 }
 
@@ -59,6 +63,28 @@ export function StarsLayer({
   useEffect(() => {
     starsRef.current = stars
   }, [stars])
+
+  // The selected star's index (or -1) plus when it was selected, for the
+  // brief "just selected" pulse (see scene/selectionPulse.ts) — same
+  // highlight-on-selection treatment every other object type gets.
+  // Looked up only when the selection itself changes (a rare, user-driven
+  // event), never per-frame — an O(n) scan every frame across a catalog
+  // this size would be the exact kind of per-frame cost this app has
+  // learned to avoid (see ARCHITECTURE.md's Phase 8 note).
+  const selectedStarIndexRef = useRef(-1)
+  const selectedAtRef = useRef<number | null>(null)
+  const selectedStarId = useSelectionStore((state) =>
+    state.selection?.type === 'star' ? state.selection.id : null,
+  )
+  useEffect(() => {
+    if (selectedStarId === null) {
+      selectedStarIndexRef.current = -1
+      selectedAtRef.current = null
+      return
+    }
+    selectedStarIndexRef.current = starsRef.current.findIndex((s) => s.id === selectedStarId)
+    selectedAtRef.current = performance.now() / 1000
+  }, [selectedStarId])
 
   const altitudesRef = useRef<Float32Array | null>(null)
   useEffect(() => {
@@ -93,6 +119,8 @@ export function StarsLayer({
       uPixelRatio: { value: dpr },
       uTwinkleAmount: { value: reducedMotion ? 0 : 1 },
       uHoveredIndex: { value: -1 },
+      uSelectedIndex: { value: -1 },
+      uSelectionPulse: { value: 0 },
       uHorizonCullingEnabled: { value: 0 },
       uExplorationEnabled: { value: 0 },
       uMagnitudeCutoff: { value: Infinity },
@@ -114,6 +142,16 @@ export function StarsLayer({
     magnitudeCutoffRef.current = cutoff
     if (explorationUniform) explorationUniform.value = explorationEnabled ? 1 : 0
     if (cutoffUniform) cutoffUniform.value = cutoff
+
+    const selectedIndexUniform = uniforms?.uSelectedIndex
+    const selectionPulseUniform = uniforms?.uSelectionPulse
+    if (selectedIndexUniform) selectedIndexUniform.value = selectedStarIndexRef.current
+    if (selectionPulseUniform) {
+      selectionPulseUniform.value =
+        selectedAtRef.current !== null
+          ? selectionPulseIntensity(performance.now() / 1000 - selectedAtRef.current)
+          : 0
+    }
 
     state.raycaster.params.Points.threshold = fovScaledPointThreshold(
       camera.fov,

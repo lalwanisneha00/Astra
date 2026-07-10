@@ -3,6 +3,7 @@ import { type ThreeEvent } from '@react-three/fiber'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
+import { usePulseHighlightScale } from '@/hooks/usePulseHighlightScale'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { wasDrag } from '@/scene/picking/dragGuard'
 import { getPlanetGlowTexture } from '@/scene/textures/planetTexture'
@@ -16,6 +17,9 @@ const MARKER_SIZE = 5
 const GLOW_SIZE_MULTIPLIER = 3.2
 const SUN_COLOR = '#fff4d6'
 const HIGHLIGHT_SCALE = 1.2
+// Extra scale at the instant of selection, decaying away — see
+// scene/selectionPulse.ts.
+const PULSE_SCALE_BOOST = 0.5
 
 interface SunMarkerProps {
   sun: SunPosition
@@ -40,6 +44,12 @@ export function SunMarker({ sun }: SunMarkerProps) {
     return [x * CELESTIAL_SPHERE_RADIUS, y * CELESTIAL_SPHERE_RADIUS, z * CELESTIAL_SPHERE_RADIUS]
   }, [sun.equatorial])
 
+  const highlightRef = usePulseHighlightScale<THREE.Group>(
+    isSelected,
+    HIGHLIGHT_SCALE,
+    PULSE_SCALE_BOOST,
+  )
+
   function handleClick(event: ThreeEvent<MouseEvent>) {
     if (wasDrag()) return
     event.stopPropagation()
@@ -58,33 +68,34 @@ export function SunMarker({ sun }: SunMarkerProps) {
   return (
     <group>
       <Billboard position={position}>
-        <mesh position={[0, 0, -0.05]} scale={isSelected ? HIGHLIGHT_SCALE : 1}>
-          <planeGeometry
-            args={[MARKER_SIZE * GLOW_SIZE_MULTIPLIER, MARKER_SIZE * GLOW_SIZE_MULTIPLIER]}
-          />
-          <meshBasicMaterial
-            map={glowTexture}
-            color={SUN_COLOR}
-            transparent
-            depthWrite={false}
-            blending={THREE.AdditiveBlending}
-          />
-        </mesh>
-        <mesh
-          scale={isSelected ? HIGHLIGHT_SCALE : 1}
-          onClick={handleClick}
-          onPointerOver={handlePointerOver}
-          onPointerOut={handlePointerOut}
-        >
-          <planeGeometry args={[MARKER_SIZE, MARKER_SIZE]} />
-          <meshBasicMaterial
-            map={texture}
-            color={SUN_COLOR}
-            transparent
-            depthWrite={false}
-            blending={THREE.AdditiveBlending}
-          />
-        </mesh>
+        <group ref={highlightRef}>
+          <mesh position={[0, 0, -0.05]}>
+            <planeGeometry
+              args={[MARKER_SIZE * GLOW_SIZE_MULTIPLIER, MARKER_SIZE * GLOW_SIZE_MULTIPLIER]}
+            />
+            <meshBasicMaterial
+              map={glowTexture}
+              color={SUN_COLOR}
+              transparent
+              depthWrite={false}
+              blending={THREE.AdditiveBlending}
+            />
+          </mesh>
+          <mesh
+            onClick={handleClick}
+            onPointerOver={handlePointerOver}
+            onPointerOut={handlePointerOut}
+          >
+            <planeGeometry args={[MARKER_SIZE, MARKER_SIZE]} />
+            <meshBasicMaterial
+              map={texture}
+              color={SUN_COLOR}
+              transparent
+              depthWrite={false}
+              blending={THREE.AdditiveBlending}
+            />
+          </mesh>
+        </group>
       </Billboard>
       {showLabels && (
         <Html position={position} center style={{ pointerEvents: 'none' }}>

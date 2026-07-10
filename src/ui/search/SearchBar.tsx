@@ -1,5 +1,13 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from 'react'
 import { useDismissablePanel } from '@/hooks/useDismissablePanel'
 import { searchObjects } from '@/lib/search'
 import type { SearchResult } from '@/types/search'
@@ -20,8 +28,15 @@ export interface SearchBarProps {
  * until someone actually wants to search. All internal query/keyboard-
  * nav/results logic is unchanged from the always-visible version this
  * replaces; only the open/close chrome around it is new.
+ *
+ * Wrapped in `memo`: App re-renders on every Time Travel tick
+ * (currentDate, throttled to ~120ms while playing), which has nothing
+ * to do with search — without this, every tick re-rendered the whole
+ * open/closed dropdown, query state, and results list for no reason.
+ * Effective as long as `index`/`onSelect` stay referentially stable
+ * (see useSearchIndex's memoization and App's useCallback).
  */
-export function SearchBar({ index, onSelect }: SearchBarProps) {
+export const SearchBar = memo(function SearchBar({ index, onSelect }: SearchBarProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
@@ -142,4 +157,4 @@ export function SearchBar({ index, onSelect }: SearchBarProps) {
       </GlassPanel>
     </div>
   )
-}
+})

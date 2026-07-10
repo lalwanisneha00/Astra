@@ -1,15 +1,19 @@
-import { type ThreeEvent } from '@react-three/fiber'
-import { useMemo } from 'react'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { equatorialToCartesian } from '@/astronomy/coordinates'
 import { CELESTIAL_SPHERE_RADIUS } from '@/scene/constants'
 import { wasDrag } from '@/scene/picking/dragGuard'
 import { hitsAnotherObject } from '@/scene/picking/interactionPriority'
+import { selectionPulseIntensity } from '@/scene/selectionPulse'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import type { Constellation } from '@/types/constellation'
 
 const DIM_COLOR = new THREE.Color('#4a5a80')
 const HIGHLIGHT_COLOR = new THREE.Color('#8ab4ff')
+// The brief "just selected" flash color the highlight pulses toward —
+// see scene/selectionPulse.ts.
+const PULSE_COLOR = new THREE.Color('#ffffff')
 
 interface ConstellationFigureProps {
   constellation: Constellation
@@ -23,6 +27,24 @@ export function ConstellationFigure({ constellation }: ConstellationFigureProps)
     (state) => state.selection?.type === 'constellation' && state.selection.id === constellation.id,
   )
   const select = useSelectionStore((state) => state.select)
+  const materialRef = useRef<THREE.LineBasicMaterial>(null)
+  // Tracked inline (rather than via the shared useSelectionPulse hook)
+  // to keep this at one useFrame subscription per figure, not two — see
+  // DsoMarker's identical reasoning.
+  const wasSelectedRef = useRef(false)
+  const selectedAtRef = useRef<number | null>(null)
+
+  useFrame((state) => {
+    if (isSelected && !wasSelectedRef.current) selectedAtRef.current = state.clock.elapsedTime
+    wasSelectedRef.current = isSelected
+
+    if (!materialRef.current) return
+    materialRef.current.color.copy(isSelected ? HIGHLIGHT_COLOR : DIM_COLOR)
+    if (isSelected && selectedAtRef.current !== null) {
+      const pulse = selectionPulseIntensity(state.clock.elapsedTime - selectedAtRef.current)
+      if (pulse > 0) materialRef.current.color.lerp(PULSE_COLOR, pulse)
+    }
+  })
 
   const positions = useMemo(() => {
     const { lines } = constellation
@@ -59,7 +81,7 @@ export function ConstellationFigure({ constellation }: ConstellationFigureProps)
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <lineBasicMaterial
-        color={isSelected ? HIGHLIGHT_COLOR : DIM_COLOR}
+        ref={materialRef}
         transparent
         opacity={isSelected ? 0.95 : 0.35}
         depthWrite={false}

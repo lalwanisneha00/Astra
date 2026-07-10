@@ -17,10 +17,11 @@ interface DeepSkyLayerProps {
  * GPU-side discard StarsLayer's 40,000+ stars required. */
 export function DeepSkyLayer({ objects, observer, date }: DeepSkyLayerProps) {
   const showDeepSky = useLayersStore((state) => state.deepSky)
-  // Explore Mode's progressive reveal only applies with no real
-  // observer — Today's Night Sky keeps showing every loaded object
-  // regardless of zoom, per the spec's "separate from Today's Night Sky."
-  const explorationEnabled = observer === null
+  // The Earth-to-Universe progressive reveal now applies in both modes
+  // — in observer mode it composes with the horizon filter below rather
+  // than replacing it, so Today's Night Sky starts at the same
+  // naked-eye baseline and reveals further exactly like Explore Mode.
+  const explorationEnabled = true
 
   const visibleObjects = useMemo(() => {
     if (!observer) return objects

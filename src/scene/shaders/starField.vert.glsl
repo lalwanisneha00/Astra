@@ -3,13 +3,20 @@ uniform float uPixelRatio;
 uniform float uTwinkleAmount;
 // -1 means "nothing hovered"; otherwise the hovered star's own aIndex.
 uniform float uHoveredIndex;
+// -1 means "nothing selected"; otherwise the selected star's own aIndex.
+uniform float uSelectedIndex;
+// 0-1, decays after selection — see scene/selectionPulse.ts. A brief
+// extra boost on top of the steady selected-highlight, the same
+// "just selected" pulse every other object type gets.
+uniform float uSelectionPulse;
 // 0 = explore mode, ignore aAltitude entirely; 1 = observer mode, hide
 // stars below the horizon. Toggling this is cheap (one uniform), unlike
 // rebuilding the star buffers on every horizon recompute.
 uniform float uHorizonCullingEnabled;
-// 0 = observer mode (Today's Night Sky) — ignore aMagnitude entirely,
-// show every loaded star as before; 1 = explore mode — apply the
-// Earth-to-Universe progressive reveal (see scene/exploration.ts).
+// 1 in both modes — applies the Earth-to-Universe progressive reveal
+// (see scene/exploration.ts) on top of horizon culling, not instead of
+// it. Kept as a uniform (rather than hardcoding "always on") in case a
+// future toggle ever wants to disable it again.
 uniform float uExplorationEnabled;
 // The faintest magnitude currently revealed in explore mode, updated
 // every frame from camera FOV — CameraController/StarsLayer already
@@ -39,7 +46,9 @@ void main() {
   float twinkle = sin(uTime * 1.6 + aTwinklePhase) * 0.5 + 0.5;
   vTwinkle = mix(1.0, 0.7 + twinkle * 0.3, uTwinkleAmount);
 
-  vHighlight = (uHoveredIndex >= 0.0 && abs(aIndex - uHoveredIndex) < 0.5) ? 1.0 : 0.0;
+  float isHovered = (uHoveredIndex >= 0.0 && abs(aIndex - uHoveredIndex) < 0.5) ? 1.0 : 0.0;
+  float isSelected = (uSelectedIndex >= 0.0 && abs(aIndex - uSelectedIndex) < 0.5) ? 1.0 : 0.0;
+  vHighlight = max(isHovered, isSelected) + isSelected * uSelectionPulse * 0.6;
   vBelowHorizon = (uHorizonCullingEnabled > 0.5 && aAltitude < 0.0) ? 1.0 : 0.0;
 
   // Fades out over a magnitude band past the cutoff rather than popping

@@ -18,10 +18,12 @@ interface StarLabelsLayerProps {
   stars: Star[]
   observer: ObserverLocation | null
   date: Date
-  /** Whether Explore Mode's Earth-to-Universe progressive reveal
-   * applies (see scene/exploration.ts) — a star not yet faded in
-   * shouldn't have a visible name label either. Always false in
-   * observer mode, unaffected by any of this. */
+  /** Whether the Earth-to-Universe progressive reveal applies (see
+   * scene/exploration.ts) — a star not yet faded in shouldn't have a
+   * visible name label either. Always true in both modes: composes
+   * with the horizon filter above rather than replacing it, so Today's
+   * Night Sky labels reveal the same way Explore Mode's do, on top of
+   * only ever labeling stars actually above the horizon. */
   explorationEnabled: boolean
 }
 

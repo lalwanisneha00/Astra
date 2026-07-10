@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { useDismissablePanel } from '@/hooks/useDismissablePanel'
 import { useLayersStore, type LayerName } from '@/state/useLayersStore'
 import { GlassPanel } from '@/ui/primitives/GlassPanel'
@@ -35,8 +35,12 @@ const LAYER_LABELS: Record<LayerName, string> = {
  * already claimed by the header, search bar, time slider, or info
  * panels. Reuses `useDismissablePanel` (Esc/outside-click) exactly like
  * every other overlay in the app.
+ *
+ * Wrapped in `memo` — see SearchBar's identical note; takes no props,
+ * so this only ever re-renders for its own state/store changes, never
+ * because App re-rendered for an unrelated reason.
  */
-export function LayerToggleDock() {
+export const LayerToggleDock = memo(function LayerToggleDock() {
   const [isOpen, setIsOpen] = useState(false)
   const reducedMotion = useReducedMotion()
   const panelRef = useDismissablePanel<HTMLDivElement>(() => setIsOpen(false))
@@ -89,4 +93,4 @@ export function LayerToggleDock() {
       </GlassPanel>
     </div>
   )
-}
+})

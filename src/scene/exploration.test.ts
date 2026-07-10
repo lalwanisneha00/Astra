@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   dsoRevealLevel,
+  fovForExplorationLevel,
+  fovForStarMagnitude,
   getExplorationLevel,
+  isDsoRevealed,
+  isStarRevealed,
   revealProgress,
   starMagnitudeCutoff,
 } from './exploration'
@@ -88,6 +92,86 @@ describe('starMagnitudeCutoff', () => {
     for (let i = 1; i < cutoffs.length; i++) {
       expect(cutoffs[i]).toBeGreaterThanOrEqual(cutoffs[i - 1]! - 1e-9)
     }
+  })
+})
+
+describe('fovForExplorationLevel', () => {
+  it('returns the wide baseline FOV for level 1', () => {
+    expect(fovForExplorationLevel(1)).toBeGreaterThanOrEqual(65)
+  })
+
+  it('returns a FOV that fully reveals the requested level', () => {
+    for (const level of [2, 3, 4, 5, 6]) {
+      const fov = fovForExplorationLevel(level)
+      expect(revealProgress(fov, level)).toBe(1)
+    }
+  })
+
+  it('returns progressively narrower FOVs for deeper levels', () => {
+    const fovs = [1, 2, 3, 4, 5, 6].map(fovForExplorationLevel)
+    for (let i = 1; i < fovs.length; i++) {
+      expect(fovs[i]).toBeLessThan(fovs[i - 1]!)
+    }
+  })
+})
+
+describe('isDsoRevealed', () => {
+  it('is true for a level-1 object at any FOV', () => {
+    const andromeda = makeDso({ id: 'NGC0224', messier: 'M31', magnitude: 3.44, type: 'G' })
+    expect(isDsoRevealed(100, andromeda)).toBe(true)
+    expect(isDsoRevealed(20, andromeda)).toBe(true)
+  })
+
+  it('is false for a deep-level object at the wide baseline FOV', () => {
+    const galaxy = makeDso({ type: 'G', magnitude: 12 })
+    expect(isDsoRevealed(90, galaxy)).toBe(false)
+  })
+
+  it('is true once zoomed to the FOV fovForExplorationLevel recommends', () => {
+    const galaxy = makeDso({ type: 'G', magnitude: 12 })
+    const requiredFov = fovForExplorationLevel(dsoRevealLevel(galaxy))
+    expect(isDsoRevealed(requiredFov, galaxy)).toBe(true)
+  })
+})
+
+describe('fovForStarMagnitude', () => {
+  it('returns the wide baseline FOV for a bright, always-visible star', () => {
+    expect(fovForStarMagnitude(1)).toBeGreaterThanOrEqual(65)
+  })
+
+  it('returns a narrower FOV for fainter stars', () => {
+    const brightStarFov = fovForStarMagnitude(3)
+    const faintStarFov = fovForStarMagnitude(7)
+    const veryFaintStarFov = fovForStarMagnitude(8)
+    expect(faintStarFov).toBeLessThan(brightStarFov)
+    expect(veryFaintStarFov).toBeLessThan(faintStarFov)
+  })
+
+  it('returns a FOV that actually reveals the star', () => {
+    for (const magnitude of [2, 5, 6.5, 7.5, 8]) {
+      const fov = fovForStarMagnitude(magnitude)
+      expect(isStarRevealed(fov, magnitude)).toBe(true)
+    }
+  })
+
+  it('never returns a FOV narrower than the deepest star tier needs', () => {
+    expect(fovForStarMagnitude(20)).toBeGreaterThanOrEqual(35)
+  })
+})
+
+describe('isStarRevealed', () => {
+  it('is true for a bright star at any FOV', () => {
+    expect(isStarRevealed(100, 2)).toBe(true)
+    expect(isStarRevealed(20, 2)).toBe(true)
+  })
+
+  it('is false for a faint star at the wide baseline FOV', () => {
+    expect(isStarRevealed(90, 7.5)).toBe(false)
+  })
+
+  it('agrees with starMagnitudeCutoff plus the fade width', () => {
+    expect(isStarRevealed(50, 6.5)).toBe(true)
+    expect(isStarRevealed(50, 7.5)).toBe(false)
   })
 })
 

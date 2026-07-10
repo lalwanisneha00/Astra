@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { useDismissablePanel } from '@/hooks/useDismissablePanel'
 import { GlassPanel } from '@/ui/primitives/GlassPanel'
 import { TimeSlider } from './TimeSlider'
@@ -11,8 +11,13 @@ import { TimeSlider } from './TimeSlider'
  * on Esc/outside-click via `useDismissablePanel`. Wraps the existing
  * `TimeSlider` completely unmodified as the panel content, so every bit
  * of scrub/play/granularity behavior stays exactly as it was.
+ *
+ * Wrapped in `memo` — see SearchBar's identical note. `TimeSlider` keeps
+ * updating live while the panel is open (it has its own store
+ * subscription), this only skips this wrapper's own pointless
+ * re-renders when collapsed.
  */
-export function TimeTravelDock() {
+export const TimeTravelDock = memo(function TimeTravelDock() {
   const [isOpen, setIsOpen] = useState(false)
   const reducedMotion = useReducedMotion()
   const panelRef = useDismissablePanel<HTMLDivElement>(() => setIsOpen(false))
@@ -48,4 +53,4 @@ export function TimeTravelDock() {
       </GlassPanel>
     </div>
   )
-}
+})

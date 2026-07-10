@@ -1157,7 +1157,7 @@ only if explicitly requested again.
 ## Interaction polish: cinematic zoom + click-priority fix
 
 Two follow-up refinements requested after the redesign above shipped,
-addressing how the zoom actually *feels* and a real click-handling
+addressing how the zoom actually _feels_ and a real click-handling
 regression the drag-guard fix had quietly introduced. Both preserve the
 existing render model (camera fixed at the origin, FOV-only "zoom," one
 celestial sphere radius for every object type) — no architecture change.
@@ -1165,15 +1165,15 @@ celestial sphere radius for every object type) — no architecture change.
 ### Zoom redesign: log-space momentum, not discrete optical steps
 
 - **Root feel problem**: zoom was a direct, linear `targetFov +=
-  deltaY * WHEEL_ZOOM_SPEED` jump, single-damped toward the display FOV.
+deltaY * WHEEL_ZOOM_SPEED` jump, single-damped toward the display FOV.
   Two things made this read as "enlarging an image" rather than
-  "traveling": the mapping was *additive* (a fixed absolute FOV step
+  "traveling": the mapping was _additive_ (a fixed absolute FOV step
   regardless of current zoom, unlike pinch's already-multiplicative
   ratio), and there was no momentum — input stopped, motion stopped.
   Hitting `MIN_FOV`/`MAX_FOV` was a hard `clamp()`, a literal wall.
 - **`src/scene/camera/zoom.ts`** (new, pure, tested): `stepZoomTarget`
-  advances the FOV target in *log space* rather than linear degrees, so
-  a wheel notch or pinch ratio produces the same *relative* zoom step
+  advances the FOV target in _log space_ rather than linear degrees, so
+  a wheel notch or pinch ratio produces the same _relative_ zoom step
   whether the camera is near the wide baseline or deep in the
   exploration levels — the same reason real distance scales (map zoom
   levels, camera dollies) are conventionally multiplicative, not
@@ -1183,7 +1183,7 @@ celestial sphere radius for every object type) — no architecture change.
   so the boundary reads as arriving and settling rather than hitting a
   wall — the hard `clamp()` is still there as a numerical safety net,
   but rarely what's actually perceived.
-- **`CameraController.tsx`**: wheel ticks now add an *impulse* to a
+- **`CameraController.tsx`**: wheel ticks now add an _impulse_ to a
   `zoomVelocityRef` (log-FOV units/second) instead of jumping the target
   directly; every frame, `stepZoomTarget` advances the target by that
   velocity, which then decays via the same `damp()`-based inertia
@@ -1195,27 +1195,27 @@ celestial sphere radius for every object type) — no architecture change.
   (impulse-rate balances decay-rate) rather than accelerating forever.
   Reduced-motion users get the wheel's total eventual effect applied in
   one step (`impulse / ZOOM_INERTIA_DAMPING`, the same integral the
-  velocity system would otherwise settle to) through the *same*
+  velocity system would otherwise settle to) through the _same_
   `stepZoomTarget` curve, so the edge-softening behavior is identical
   either way — just without the coast to animate through.
 - Camera orientation (yaw/pitch) is untouched by any of this — zoom only
   ever writes `targetFov`/`zoomVelocityRef`, so the center of focus never
   drifts during a zoom gesture. The existing Earth-to-Universe reveal
   system (`exploration.ts`, Batch 3/4) reads only `camera.fov` each
-  frame, so it's unaffected by *how* that value now arrives — the fades
+  frame, so it's unaffected by _how_ that value now arrives — the fades
   it already does just ride a smoother, momentum-driven FOV curve now.
 
 ### Click-priority fix: stars and constellation lines were starving every other object
 
 - **Root cause, verified against Three.js/react-three-fiber source, not
   guessed**: `Points.raycast` and `Line.raycast` report a hit's
-  `distance` as the distance to the *closest point on the ray itself* to
+  `distance` as the distance to the _closest point on the ray itself_ to
   the star/segment (`Ray.distanceSqToPoint` / `distanceSqToSegment`),
   not the star's true position. Since a flat billboard mesh (DSO/
   planet/Sun/Moon marker) tangent to the celestial sphere only equals
   the sphere's true radius exactly at its own center, this makes a
-  nearby star or constellation line's reported distance *systematically
-  less than* a marker's real, exact mesh-intersection distance at the
+  nearby star or constellation line's reported distance _systematically
+  less than_ a marker's real, exact mesh-intersection distance at the
   same nominal radius. React-three-fiber dispatches click events
   nearest-first and stops at the first `stopPropagation()` — so with
   every star/line's `handleClick` calling `stopPropagation()`
@@ -1226,7 +1226,7 @@ celestial sphere radius for every object type) — no architecture change.
   which is exactly why only stars ever seemed to respond.
 - **`src/scene/picking/interactionPriority.ts`** (new, pure, tested):
   `hitsAnotherObject(intersections, self)` — true if the same raycast
-  also hit a *different* object with its own handler. Both `StarsLayer`
+  also hit a _different_ object with its own handler. Both `StarsLayer`
   (click and hover) and `ConstellationFigure` (click) check this first
   and, if true, return without calling `stopPropagation()` — letting
   r3f's event dispatch continue naturally to the next (real) intersected
@@ -1234,8 +1234,146 @@ celestial sphere radius for every object type) — no architecture change.
   planet/Sun/Moon markers need no equivalent check: their raycasts are
   exact mesh intersections with no such bias, so legitimate ties between
   two of them already resolve correctly by true distance.
-- Deliberately *not* a reduced clickable area: the FOV-scaled point/line
+- Deliberately _not_ a reduced clickable area: the FOV-scaled point/line
   thresholds (`fovScaledPointThreshold`) are untouched, so stars and
   constellation lines remain exactly as easy to hit as before — this
-  only changes *priority* when a click also lands on something more
+  only changes _priority_ when a click also lands on something more
   specific.
+
+## Interaction system refinement: exploration in both modes, intelligent search, performance, pulses
+
+A follow-up pass fixing a real regression (only stars clickable — see
+above) plus five further refinements: Earth-to-Universe exploration in
+Today's Night Sky, intelligent search navigation, a render-storm
+performance fix, and attention-pulse animations. No architecture change
+— same camera model, same celestial-sphere render, same store shape.
+
+### Exploration now applies in both modes
+
+- **Root cause of the request**: `explorationEnabled` was wired as
+  `!horizonCullingEnabled` (`SceneCanvas.tsx`) and `observer === null`
+  (`DeepSkyLayer.tsx`) — an either/or toggle between "horizon culling"
+  and "exploration reveal," never both. But the shader
+  (`starField.frag.glsl`) and DSO opacity logic were already built to
+  **compose** the two as independent discard/fade conditions (confirmed
+  by reading both — `vBelowHorizon` and `vRevealAlpha` are separate,
+  both-must-pass checks). So enabling exploration in observer mode was a
+  one-line flip at each of the two call sites, not a new system — Batch
+  3's architecture already anticipated this.
+- Every `explorationEnabled` prop and doc comment across
+  `StarsLayer`/`StarLabelsLayer`/`DsoMarker`/`DeepSkyLayer` updated from
+  "true only in explore mode" to "always true; composes with horizon
+  culling when a real observer exists."
+- **Entering observer mode also resets zoom** to the Level-1 baseline
+  (`useSceneStore.DEFAULT_FOV`, now exported) in the same `useEffect`
+  that already re-orients the camera south — otherwise a zoom carried
+  over from Explore Mode could open Today's Night Sky already showing
+  deeper exploration levels instead of "what's naturally visible from
+  here, right now," per the request's explicit requirement.
+
+### Intelligent search navigation
+
+- **`scene/exploration.ts` gained the inverse functions** needed to fly
+  *to* a reveal level rather than just query it:
+  `fovForExplorationLevel(level)` (the FOV that fully reveals a DSO
+  level, with a small arrival margin past the fade band) and
+  `fovForStarMagnitude(magnitude)` (the mathematical inverse of
+  `starMagnitudeCutoff`, shifted by `MAGNITUDE_FADE_WIDTH` so the target
+  FOV reveals the star comfortably, not just at the bare threshold).
+  Also `isStarRevealed`/`isDsoRevealed`, which mirror the exact same
+  cutoffs `StarsLayer`'s `isCulled` and `DsoMarker`'s click-gating
+  already use (`DSO_CLICKABLE_OPACITY`, now shared from
+  `exploration.ts` rather than a private DsoMarker constant), so
+  search's idea of "visible" always agrees with what's actually
+  clickable.
+- **`App.tsx`'s `handleSearchSelect`** now checks, for stars and DSOs
+  only (constellations/planets/Sun/Moon are always Level-1 baseline,
+  never need this): is the result already revealed at the *current*
+  FOV? If not, `setTargetFov` is set alongside `setFlyToTarget` to the
+  FOV that reveals it. Both the yaw/pitch fly-to and the FOV zoom ease
+  concurrently in `CameraController`'s existing `useFrame`, so the
+  camera pans *and* travels deeper at once — a single cinematic
+  flight, not two separate motions. "Reveal nearby context along the
+  way" needs no extra code: every other object's existing per-frame
+  fade already runs off the same FOV, so intermediate objects fade in
+  naturally as the flight passes their own reveal levels.
+- `MIN_FOV`/`MAX_FOV` moved from `CameraController.tsx` (private) to
+  `scene/constants.ts` (shared), so App's search handler clamps against
+  the same authoritative bounds.
+
+### Attention pulse on selection (search and direct clicks alike)
+
+- **`scene/selectionPulse.ts`** (new, pure, tested):
+  `selectionPulseIntensity(elapsedSeconds)` — 1 at the instant of
+  selection, smoothstep-decaying to 0 over `SELECTION_PULSE_DURATION_SECONDS`
+  (1.2s). Layered on top of each object's existing static
+  selected-highlight (color/opacity/scale), not replacing it.
+- **`hooks/useSelectionPulse.ts`** and **`hooks/usePulseHighlightScale.ts`**
+  (new): reusable ref-based hooks for components with no other
+  per-frame work of their own (`PlanetMarker`, `SunMarker`,
+  `MoonMarker`) — attach a ref, get a pulsing scale, no manual
+  `useFrame` needed.
+- `DsoMarker` and `ConstellationFigure` track the pulse **inline**
+  inside their existing `useFrame` instead of using the hook, deliberately
+  avoiding a second `useFrame` subscription per instance — at up to ~500
+  DSOs and 88 constellations, doubling the per-frame callback count for
+  those two layers specifically would be exactly the kind of cost this
+  app's performance work exists to avoid.
+- **`StarsLayer`'s shader** gained `uSelectedIndex`/`uSelectionPulse`
+  uniforms mirroring the existing `uHoveredIndex` mechanism — the
+  selected star's index is looked up once per selection *change* (a
+  cached ref, not a per-frame scan across ~40,000 stars), and the pulse
+  boosts point size/brightness briefly on top of the steady
+  selected/hovered highlight.
+
+### Performance: fixing a real render-storm
+
+- **Root cause, verified by reading every reactive `useSceneStore`/
+  `useTimeStore` subscriber**: `App` re-renders on every Time Travel
+  tick (`currentDate`, throttled to ~120ms while playing — up to ~8×/
+  second) and on every other store change it subscribes to. Every
+  child in the header/dock cluster (`SearchBar`, `TodayButton`,
+  `LayerToggleDock`, `TimeTravelDock`, `TonightsHighlightsPanel`) — none
+  of which have anything to do with the current date — re-rendered right
+  along with it, since none were memoized and several received a fresh
+  inline callback (`onSelect`, `onNeedManualLocation`) on every single
+  `App` render, defeating even a naive `memo` wrap.
+- Fixed at the source: `handleSearchSelect` and the location-picker
+  callback are now `useCallback`-stabilized in `App.tsx`, and
+  `SearchBar`/`TodayButton`/`LayerToggleDock`/`TimeTravelDock`/
+  `TonightsHighlightsPanel` are wrapped in `React.memo` — each now skips
+  re-rendering entirely on an unrelated `App` render, only updating for
+  its own state or store subscriptions (or, for `TonightsHighlightsPanel`,
+  when `context` itself legitimately changes in observer mode).
+- **`useDismissablePanel`** (used by all of the above plus `InfoPanel`/
+  `LocationPicker`) was tearing down and re-adding two
+  `document`-level event listeners on *every render* of every
+  dismissable panel, since the `onClose` callback passed in
+  (`() => setIsOpen(false)`) is a fresh closure each time and was a
+  direct effect dependency. Fixed by reading `onClose` through a ref
+  (updated every render, but never itself a dependency), so both
+  listeners register exactly once per mount — the standard "stable
+  event handler" pattern, and a meaningful reduction in per-render work
+  across every overlay in the app, not just the ones touched above.
+- **`DsoMarker`/`ConstellationFigure`** avoid a second `useFrame`
+  subscription for the new pulse (see above) — the other concrete,
+  measured way this pass avoided adding net-new per-frame cost while
+  still shipping the requested highlight animation.
+- Observer mode's newly-composed exploration reveal (see above) is
+  also a genuine performance win, not just a feature: Today's Night Sky
+  previously rendered every above-horizon star/DSO unconditionally
+  regardless of zoom; it now thins by magnitude/reveal-level exactly
+  like Explore Mode, reducing GPU overdraw and the number of raycast
+  candidates at the default (wide) zoom.
+
+### Tonight's Highlights attention pulse
+
+- The trigger button gets a soft pulsing glow (`framer-motion`
+  `boxShadow` keyframe animation, 1.8s loop, respects
+  `prefers-reduced-motion`) until the user opens the panel for the
+  first time *this session* — a plain `useState` flag is enough, since
+  `TonightsHighlightsPanel` is always mounted by `App` (its own early
+  `return null` in explore mode doesn't unmount it), so the flag
+  persists across mode switches and open/close cycles for the whole
+  session, resetting only on a real page reload. Closing the panel
+  again does not resume the pulse.

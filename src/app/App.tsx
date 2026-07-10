@@ -1,5 +1,5 @@
 import { AnimatePresence } from 'framer-motion'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { HighlightContext } from '@/astronomy/highlights'
 import { horizontalToEquatorial } from '@/astronomy/horizontal'
 import { useConstellations } from '@/hooks/useConstellations'
@@ -11,9 +11,18 @@ import { useSearchIndex } from '@/hooks/useSearchIndex'
 import { useStarCatalog } from '@/hooks/useStarCatalog'
 import { useSunPosition } from '@/hooks/useSunPosition'
 import { useVisibleConstellations } from '@/hooks/useVisibleConstellations'
+import { clamp } from '@/lib/math'
 import { SceneCanvas } from '@/scene/Canvas/SceneCanvas'
+import { MAX_FOV, MIN_FOV } from '@/scene/constants'
+import {
+  dsoRevealLevel,
+  fovForExplorationLevel,
+  fovForStarMagnitude,
+  isDsoRevealed,
+  isStarRevealed,
+} from '@/scene/exploration'
 import { useLocationStore } from '@/state/useLocationStore'
-import { useSceneStore } from '@/state/useSceneStore'
+import { DEFAULT_FOV, useSceneStore } from '@/state/useSceneStore'
 import { useSelectionStore } from '@/state/useSelectionStore'
 import { useTimeStore } from '@/state/useTimeStore'
 import type { ObserverLocation } from '@/types/coordinates'
@@ -66,14 +75,19 @@ export function App() {
 
   // Elegant transition into observer mode: ease the camera to look
   // roughly south rather than leaving it pointed wherever explore mode
-  // happened to be facing. Reads currentDate imperatively (not as a
-  // dependency) so this only re-fires when the observer itself changes,
-  // not on every tick once Phase 8 adds continuous time.
+  // happened to be facing, and reset zoom to the Level-1 naked-eye
+  // baseline — otherwise a zoom carried over from Explore Mode could
+  // open Today's Night Sky already showing deeper exploration levels
+  // instead of "what's naturally visible from here, right now." Reads
+  // currentDate imperatively (not as a dependency) so this only re-fires
+  // when the observer itself changes, not on every tick once Phase 8
+  // adds continuous time.
   useEffect(() => {
     if (!observer) return
     const date = useTimeStore.getState().currentDate
     const target = horizontalToEquatorial(DEFAULT_OBSERVER_VIEW, observer, date)
     useSceneStore.getState().setFlyToTarget(target)
+    useSceneStore.getState().setTargetFov(DEFAULT_FOV)
   }, [observer])
 
   const horizonCullingEnabled = observer !== null
@@ -128,24 +142,65 @@ export function App() {
   // rather than a coordinate baked into the search index, so a planet's
   // fly-to target is never a stale snapshot from whenever the index was
   // built (see useSearchIndex).
-  function handleSearchSelect(result: SearchResult) {
-    select({ type: result.type, id: result.id })
+  // Intelligent search navigation: if the result isn't currently revealed
+  // at this zoom depth (a faint star or a deep-level DSO — see
+  // scene/exploration.ts), the flight also zooms to the FOV that reveals
+  // it, riding the exact same Earth-to-Universe fade every other zoom
+  // already uses, so nearby context reveals naturally along the way
+  // rather than teleporting to what would otherwise look like empty
+  // space. Constellations/planets/Sun/Moon are always part of the
+  // Level-1 baseline, so they never need this — a plain fly-to already
+  // lands somewhere visible.
+  //
+  // Wrapped in useCallback (stable reference) so SearchBar — wrapped in
+  // React.memo — doesn't re-render on every App render (e.g. Time
+  // Travel's currentDate ticking every 120ms while playing), which was
+  // otherwise churning its dismissable-panel listeners and general
+  // render work on every tick regardless of whether search was even
+  // open.
+  const handleSearchSelect = useCallback(
+    (result: SearchResult) => {
+      select({ type: result.type, id: result.id })
 
-    const target =
-      result.type === 'star'
-        ? starCatalog.stars.find((star) => star.id === result.id)?.equatorial
-        : result.type === 'constellation'
-          ? constellations.find((c) => c.id === result.id)?.labelPosition
-          : result.type === 'planet'
-            ? planets.find((planet) => planet.id === result.id)?.equatorial
-            : result.type === 'dso'
-              ? deepSkyObjects.find((dso) => dso.id === result.id)?.equatorial
-              : result.type === 'sun'
-                ? sun.equatorial
-                : moon.equatorial
+      const target =
+        result.type === 'star'
+          ? starCatalog.stars.find((star) => star.id === result.id)?.equatorial
+          : result.type === 'constellation'
+            ? constellations.find((c) => c.id === result.id)?.labelPosition
+            : result.type === 'planet'
+              ? planets.find((planet) => planet.id === result.id)?.equatorial
+              : result.type === 'dso'
+                ? deepSkyObjects.find((dso) => dso.id === result.id)?.equatorial
+                : result.type === 'sun'
+                  ? sun.equatorial
+                  : moon.equatorial
 
-    if (target) useSceneStore.getState().setFlyToTarget(target)
-  }
+      if (!target) return
+
+      const currentFov = useSceneStore.getState().fov
+      let requiredFov: number | null = null
+
+      if (result.type === 'star') {
+        const star = starCatalog.stars.find((s) => s.id === result.id)
+        if (star && !isStarRevealed(currentFov, star.magnitude)) {
+          requiredFov = fovForStarMagnitude(star.magnitude)
+        }
+      } else if (result.type === 'dso') {
+        const dso = deepSkyObjects.find((d) => d.id === result.id)
+        if (dso && !isDsoRevealed(currentFov, dso)) {
+          requiredFov = fovForExplorationLevel(dsoRevealLevel(dso))
+        }
+      }
+
+      useSceneStore.getState().setFlyToTarget(target)
+      if (requiredFov !== null) {
+        useSceneStore.getState().setTargetFov(clamp(requiredFov, MIN_FOV, MAX_FOV))
+      }
+    },
+    [select, starCatalog, constellations, planets, deepSkyObjects, sun, moon],
+  )
+
+  const handleNeedManualLocation = useCallback(() => setShowLocationPicker(true), [])
 
   return (
     <ErrorBoundary>
@@ -171,7 +226,7 @@ export function App() {
             <SearchBar index={searchIndex} onSelect={handleSearchSelect} />
           </div>
           <div className="flex flex-wrap items-start gap-2">
-            <TodayButton onNeedManualLocation={() => setShowLocationPicker(true)} />
+            <TodayButton onNeedManualLocation={handleNeedManualLocation} />
             <TonightsHighlightsPanel context={highlightContext} />
           </div>
         </header>
