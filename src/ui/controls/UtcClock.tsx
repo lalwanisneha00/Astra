@@ -29,9 +29,9 @@ export function UtcClock() {
   const { dateLine, timeLine } = formatUtc(now)
 
   return (
-    <GlassPanel className="pointer-events-auto px-3 py-1.5 text-center">
-      <p className="text-[11px] leading-tight text-star-500 tabular-nums">{dateLine}</p>
-      <p className="text-xs leading-tight font-medium text-star-100 tabular-nums">{timeLine}</p>
+    <GlassPanel className="pointer-events-auto px-3.5 py-2 text-center">
+      <p className="text-xs leading-tight text-star-500 tabular-nums">{dateLine}</p>
+      <p className="text-sm leading-tight font-medium text-star-100 tabular-nums">{timeLine}</p>
     </GlassPanel>
   )
 }

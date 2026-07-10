@@ -234,7 +234,7 @@ export function App() {
             <TonightsHighlightsPanel context={highlightContext} />
           </div>
         </header>
-        <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+        <div className="pointer-events-none absolute right-4 bottom-4 z-20">
           <UtcClock />
         </div>
         <div className="pointer-events-none absolute bottom-4 left-4 z-10 flex items-end gap-2">
