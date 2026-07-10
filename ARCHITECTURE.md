@@ -1925,3 +1925,86 @@ now dominated by ordinary three.js matrix/render work with no single
 outsized contributor. The same fix automatically also speeds up the
 fly-to/search-flight case, since that animation drives the exact same
 FOV-throttled hooks over its own (typically longer) duration.
+
+## Mobile info panel: a draggable bottom sheet instead of the desktop top-right panel
+
+On a phone-sized viewport, the desktop `InfoPanel` (fixed at
+`top-4 right-4 bottom-4`, ~380px wide) put the selected object's title
+directly behind the header's logo/search button — there's no room for
+a 380px-wide panel beside them on a narrow screen. Rather than just
+repositioning that same panel, `InfoPanel.tsx` now switches between two
+completely separate implementations based on viewport size, one per
+render:
+
+- `DesktopInfoPanel.tsx` — byte-for-byte the previous `InfoPanel.tsx`
+  contents, just moved into its own file. Nothing about desktop
+  behavior, layout, or styling changed.
+- `MobileInfoSheet.tsx` (new) — a draggable bottom sheet.
+
+All six type-specific panels (`StarPanel`, `ConstellationPanel`, etc.)
+render through `InfoPanel` unchanged — they only ever build
+`facts`/`description`/`related`, so the mobile/desktop switch is
+invisible to them.
+
+### Detecting "mobile"
+
+`useIsMobileViewport` matches `(max-width: 767px), (max-height: 500px)`
+— width _or_ height, not just width. A phone's short dimension stays
+roughly constant across rotation (e.g. ~390px), while its long
+dimension swaps between being the width and the height; matching on
+width alone (a plain `md` breakpoint) would misclassify a phone rotated
+to landscape (e.g. 844×390) as desktop, since 844 comfortably exceeds
+any reasonable width cutoff. Reactive via `matchMedia`'s `change`
+event, so rotating a phone or resizing a window switches layouts live,
+no reload needed.
+
+### Sizing math: real pixels, not CSS percentages
+
+The sheet opens at ~38% of viewport height and can be dragged up to
+just below the header or down to dismiss. Framer Motion's `drag`/
+`dragConstraints`/`animate` all need plain numbers to compare against,
+so the sheet's height and snap points are computed in JS from
+`window.innerHeight` (reactive to `resize`/`orientationchange`) rather
+than left as CSS `dvh`/`%`.
+
+How far the sheet may be dragged upward is capped by
+`useHeaderSafeBottom`, which measures the actual `<header>` element's
+bottom edge via `ResizeObserver` (plus resize/orientation listeners) —
+not a guessed fixed margin — because the header's own height varies
+with content wrapping (`TodayButton`/`TonightsHighlightsPanel` can wrap
+to two lines on a narrow phone) and between portrait/landscape. This is
+what guarantees the sheet's "nearly full-screen" expanded state never
+covers the logo/search button, regardless of phone size or orientation.
+
+### Drag mechanics
+
+The whole sheet is `motion.div` with `drag="y"` using Framer Motion's
+own default pointer listener — deliberately _not_ the
+`useDragControls()` + `dragListener={false}` + manual
+`dragControls.start(event)` pattern usually recommended for scoping a
+drag gesture to a specific handle. That pattern was tried first, but
+testing showed it only starts a drag on the _first_ gesture: calling
+`dragControls.start()` from a second `onPointerDown` was observed to
+register the call (confirmed by logging) without ever producing a
+`dragstart`/`drag`/`dragend` sequence, silently stranding the sheet.
+Switching to plain default `drag` (which reliably fires every time)
+and instead calling `event.stopPropagation()` on `onPointerDown` inside
+the _scrollable content area only_ achieves the same "handle drags the
+sheet, content scrolls independently" result: Framer Motion's drag
+listener sits on the outer element and only sees pointer events that
+bubble up to it, so a stopped pointerdown inside the content area never
+reaches it, while the handle/title area above (untouched) still starts
+a drag normally.
+
+Where the sheet settles after a drag — expanded, back to peek, or
+dismissed — is decided by `bottomSheetSnap.ts`'s pure `resolveSheetSnap`
+(unit tested): a fast flick in either direction wins outright regardless
+of release position (matching native map-app sheets), otherwise release
+position relative to two thresholds decides. Dismissing calls the same
+`onClose`/`clearSelection` every other panel type uses, so
+`AnimatePresence` plays the sheet's `exit` animation (sliding fully back
+off-screen) from wherever the drag released it.
+
+Keyboard Escape, outside-tap-to-close, and focus management are the
+exact same `useDismissablePanel` hook desktop uses, applied to the
+sheet's own root element — no new dismissal logic needed.
