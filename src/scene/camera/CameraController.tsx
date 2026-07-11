@@ -22,6 +22,14 @@ const INERTIA_DAMPING = 6
 const VELOCITY_EPSILON = 0.0005
 const FLY_TO_DAMPING = 4
 const FLY_TO_EPSILON = 0.0005
+// Scales raw pixel movement down before it becomes a rotation, so a
+// given drag distance moves the camera a little less than a 1:1 pixel
+// mapping would — makes the sky feel heavier/more controlled without
+// slowing the response itself (still applied every pointermove, same
+// as before). Purely a sensitivity multiplier: doesn't touch the
+// FOV-proportional scaling below it, click/drag-threshold detection, or
+// the inertia/damping that takes over once the pointer releases.
+const DRAG_SENSITIVITY = 0.8
 
 // Zoom target now advances in log-FOV space (see zoom.ts) driven by a
 // velocity — degrees-per-second-equivalent, but expressed as log-FOV
@@ -225,7 +233,8 @@ export function CameraController() {
 
       const now = performance.now()
       const deltaTime = Math.max((now - lastMoveTime) / 1000, 1 / 240)
-      const radPerPixel = THREE.MathUtils.degToRad(perspectiveCamera.fov) / canvas.clientHeight
+      const radPerPixel =
+        (THREE.MathUtils.degToRad(perspectiveCamera.fov) / canvas.clientHeight) * DRAG_SENSITIVITY
 
       const yawDelta = dx * radPerPixel
       const pitchDelta = dy * radPerPixel
