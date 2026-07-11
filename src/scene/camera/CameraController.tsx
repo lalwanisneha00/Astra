@@ -109,6 +109,13 @@ export function CameraController() {
     let pinchLastDistance: number | null = null
     let lastPinchTime = 0
     let pointerLockRequestedForGesture = false
+    // Tracks whether the *previous processed move* was already reading
+    // locked (movementX/Y) deltas, so the transition frame - the first
+    // move event after the browser actually grants a lock requested
+    // mid-gesture - can be detected and its delta discarded. See the
+    // isPointerLocked block in handlePointerMove for why that one frame
+    // needs special handling.
+    let wasPointerLocked = false
 
     const handlePointerDown = (event: PointerEvent) => {
       if (event.pointerType === 'mouse' && event.button !== 0) return
@@ -155,6 +162,11 @@ export function CameraController() {
         // I click" reports. A real drag still requests lock within a
         // frame or two of starting, imperceptibly later than before.
         pointerLockRequestedForGesture = false
+        // A lock from a previous gesture is always explicitly released
+        // in handlePointerUp before this can run again, but resetting
+        // here too means a fresh gesture never mistakes a leftover
+        // "was locked" flag for this gesture's own transition frame.
+        wasPointerLocked = false
       } else if (activePointers.size === 2) {
         isDraggingRef.current = false
         const [a, b] = [...activePointers.values()]
@@ -216,9 +228,27 @@ export function CameraController() {
       }
 
       const isPointerLocked = document.pointerLockElement === canvas
+      const justEngagedLock = isPointerLocked && !wasPointerLocked
+      wasPointerLocked = isPointerLocked
+
       let dx: number
       let dy: number
-      if (isPointerLocked) {
+      if (justEngagedLock) {
+        // The lock we requested at the start of this gesture has just
+        // been granted mid-drag — often a second or more after the
+        // request, since the browser's own grant isn't synchronous (see
+        // the pointerLockRequestedForGesture comment above). Chromium
+        // does not cleanly report this transition frame's movementX/Y
+        // as "since the previous event" the way every later locked frame
+        // does; it can carry a large, spurious value unrelated to any
+        // real recent motion, which would otherwise snap the camera to a
+        // different part of the sky the instant the lock engages. This
+        // one frame's delta is discarded (treated as no movement) so the
+        // camera stays exactly where it visually was; normal relative
+        // tracking resumes cleanly from the very next event.
+        dx = 0
+        dy = 0
+      } else if (isPointerLocked) {
         // Relative deltas — unbounded by the physical screen edge, since
         // the OS cursor doesn't move at all while locked.
         dx = event.movementX
